@@ -1,0 +1,71 @@
+#pragma once
+
+#include <string>
+#include <map>
+#include <memory>
+
+class Config {
+public:
+    static Config& getInstance();
+    
+    // Load configuration from file
+    bool loadFromFile(const std::string& filename = "config.txt");
+    
+    // Getters for configuration values
+    std::string getBinanceApiKey() const;
+    std::string getBinanceSecretKey() const;
+    std::string getBinanceBaseUrl() const;
+    std::string getBinanceWsUrl() const;
+    std::string getTradingSymbol() const;
+    std::string getBaseAsset() const;
+    std::string getQuoteAsset() const;
+    
+    // Strategy parameters
+    double getSpreadThresholdBps() const;
+    double getOrderSize() const;
+    double getMaxInventory() const;
+    int getOrderRefreshIntervalMs() const;
+    int getOrderTimeoutSeconds() const;
+    
+    // Risk management
+    double getMaxDailyDrawdown() const;
+    double getPositionLimit() const;
+    bool isCircuitBreakerEnabled() const;
+    
+    // System configuration
+    std::string getRedisHost() const;
+    int getRedisPort() const;
+    int getRedisDb() const;
+    
+    // Logging
+    std::string getLogLevel() const;
+    bool isLogToFile() const;
+    bool isLogToConsole() const;
+    
+    // Performance settings
+    int getOrderbookDepth() const;
+    int getWebsocketPingInterval() const;
+    int getRestTimeoutSeconds() const;
+    int getMaxReconnectAttempts() const;
+    
+    // Development settings
+    bool isTestnet() const;
+    bool isPaperTrading() const;
+    bool isDebuggingEnabled() const;
+
+private:
+    Config() = default;
+    ~Config() = default;
+    Config(const Config&) = delete;
+    Config& operator=(const Config&) = delete;
+    
+    std::map<std::string, std::string> config_map_;
+    
+    // Helper methods
+    std::string getString(const std::string& key, const std::string& default_val = "") const;
+    double getDouble(const std::string& key, double default_val = 0.0) const;
+    int getInt(const std::string& key, int default_val = 0) const;
+    bool getBool(const std::string& key, bool default_val = false) const;
+    
+    void trim(std::string& str);
+}; 

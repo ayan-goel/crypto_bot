@@ -1,0 +1,73 @@
+# Build artifacts
+build/
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+install_manifest.txt
+
+# Compiled objects and executables
+*.o
+*.so
+*.a
+*.exe
+crypto_hft_bot
+hft-bot
+
+# Configuration files with sensitive data
+config.txt
+.env
+*.key
+
+# Log files
+logs/
+*.log
+
+# Data files
+data/*.csv
+data/*.json
+data/*.db
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+core
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Backup files
+*.bak
+*.backup
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Python (if we add any Python tools)
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Redis dump files
+dump.rdb
+
+# Test results
+test_results/
+coverage/ 
+
+crypto-bot-key.pem
