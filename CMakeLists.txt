@@ -36,6 +36,10 @@ find_package(nlohmann_json REQUIRED)
 # Find hiredis (Redis C client)
 pkg_check_modules(HIREDIS REQUIRED hiredis)
 
+# Find libwebsockets
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
+
 # Add executable
 set(SOURCES
     src/main.cpp
@@ -58,7 +62,7 @@ target_link_libraries(${PROJECT_NAME}
     CURL::libcurl
     nlohmann_json::nlohmann_json
     ${HIREDIS_LIBRARIES}
-    uSockets
+    ${LIBWEBSOCKETS_LIBRARIES}
     z  # zlib for compression
     pthread
 )
@@ -68,6 +72,10 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${HIREDIS_INCLUDE_DIRS})
 
 # Set compile flags for hiredis
 target_compile_options(${PROJECT_NAME} PRIVATE ${HIREDIS_CFLAGS_OTHER})
+
+# Include directories and flags for libwebsockets
+target_include_directories(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_INCLUDE_DIRS})
+target_compile_options(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_CFLAGS_OTHER})
 
 # Installation
 install(TARGETS ${PROJECT_NAME} DESTINATION bin) 
