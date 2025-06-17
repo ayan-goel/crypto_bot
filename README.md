@@ -37,8 +37,6 @@ This bot only places passive limit orders. It never crosses the spread with a ma
 
 ## Quick Setup (Local Development)
 
-**Before following the full installation guide below, you can get started locally:**
-
 1. **Copy the configuration template:**
    ```bash
    cp config.template config.txt
@@ -287,7 +285,3 @@ hft-bot/
 * Add second exchange for cross-exchange arbitrage
 * Implement latency tracking between market data and order placement
 * Build backtester using historical WebSocket dumps
-
----
-
-Let me know if you want this added to your repo as a `README.md` or `MVP_PLAN.md` file.
