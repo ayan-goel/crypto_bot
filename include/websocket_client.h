@@ -8,15 +8,7 @@
 #include <memory>
 #include <chrono>
 #include <nlohmann/json.hpp>
-
-// Forward declaration to avoid including uWS headers in header file
-namespace uWS {
-    template <bool SSL, bool isServer, typename USERDATA>
-    struct WebSocket;
-    
-    template <bool SSL>
-    struct TemplatedApp;
-}
+#include <libwebsockets.h>
 
 class WebSocketClient {
 public:
@@ -65,6 +57,9 @@ private:
     std::atomic<bool> connected_{false};
     std::atomic<bool> running_{false};
     std::string url_;
+    std::string host_;
+    std::string path_;
+    int port_{443};
     
     // Pending subscriptions (sent when connection is established)
     std::vector<std::string> pending_subscriptions_;
@@ -97,12 +92,19 @@ private:
     int reconnect_delay_seconds_ = 5;
     int message_timeout_seconds_ = 60;
     
-    // uWebSockets members (using pointers to avoid header dependencies)
-    void* app_ptr_ = nullptr;  // Will be cast to uWS::App*
-    void* ws_ptr_ = nullptr;   // Will be cast to uWS::WebSocket*
+    // libwebsockets members
+    struct lws_context *context_ = nullptr;
+    struct lws *wsi_ = nullptr;
+    struct lws_protocols protocols_[2];
+    struct lws_context_creation_info info_;
+    
+    // Message buffer for libwebsockets
+    std::string rx_buffer_;
+    std::vector<std::string> tx_queue_;
+    std::mutex tx_mutex_;
     
     // Worker methods
-    void workerLoop(const std::string& host, const std::string& path);
+    void workerLoop();
     void pingLoop();
     
     // Connection handling
@@ -129,11 +131,13 @@ private:
     bool isMessageTimeoutExceeded() const;
     
     // URL parsing
-    bool parseUrl(const std::string& url, std::string& host, std::string& path);
+    bool parseUrl(const std::string& url, std::string& host, std::string& path, int& port);
     
-    // Real Binance data connection
-    void connectToRealBinanceStream(const std::string& host);
-    std::string fetchRealOrderBookData(const std::string& host);
-    static size_t curlWriteCallback(void* contents, size_t size, size_t nmemb, std::string* response);
-    std::string convertRestToStreamFormat(const std::string& rest_response);
+    // libwebsockets callback
+    static int lwsCallback(struct lws *wsi, enum lws_callback_reasons reason,
+                          void *user, void *in, size_t len);
+    
+    // Send message via libwebsockets
+    void sendMessage(const std::string& message);
+    void flushTxQueue();
 }; 
