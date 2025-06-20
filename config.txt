@@ -5,25 +5,25 @@ BINANCE_SECRET_KEY=your_secret_key_here
 # Trading Environment (testnet or mainnet)
 USE_TESTNET=true
 BINANCE_BASE_URL=https://testnet.binance.vision
-BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@depth10@100ms
+BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@depth20
 
 # Trading Pair Configuration
 TRADING_SYMBOL=ETHUSDT
 BASE_ASSET=ETH
 QUOTE_ASSET=USDT
 
-# Strategy Parameters - Ultra-aggressive HFT
+# Strategy Parameters - Ultra-aggressive HFT with $50 capital safety
 SPREAD_THRESHOLD_BPS=0.01
-ORDER_SIZE=0.005
-MAX_INVENTORY=0.1
+ORDER_SIZE=0.001
+MAX_INVENTORY=0.02
 ORDER_REFRESH_INTERVAL_MS=10
 ORDER_TIMEOUT_SECONDS=2
 
-# Risk Management - Ultra-aggressive HFT limits
-MAX_DAILY_LOSS_LIMIT=25.0
-MAX_DRAWDOWN_LIMIT=15.0
-POSITION_LIMIT_ETHUSDT=1.0
-ORDER_RATE_LIMIT=1000
+# Risk Management - Conservative limits for $50 capital with ultra-aggressive strategy
+MAX_DAILY_LOSS_LIMIT=5.0
+MAX_DRAWDOWN_LIMIT=3.0
+POSITION_LIMIT_ETHUSDT=0.05
+ORDER_RATE_LIMIT=500
 ENABLE_CIRCUIT_BREAKER=true
 RISK_MONITORING=true
 
