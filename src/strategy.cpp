@@ -185,16 +185,21 @@ double Strategy::calculateOptimalAskPrice(const OrderBookSnapshot& orderbook) co
 }
 
 double Strategy::calculateOrderQuantity(const std::string& side) const {
-    // For now, use fixed order size - could be enhanced with dynamic sizing
+    // Use fixed order size optimized for HFT
     double quantity = order_size_;
     
-    // Adjust quantity based on current inventory to avoid building large positions
+    // For HFT, be more aggressive with inventory management
     double current_inventory = current_position_.quantity;
     
-    if (side == "BUY" && current_inventory > max_inventory_ * 0.8) {
-        quantity *= 0.5;  // Reduce buy quantity when inventory is high
-    } else if (side == "SELL" && current_inventory < -max_inventory_ * 0.8) {
-        quantity *= 0.5;  // Reduce sell quantity when short inventory is high
+    if (side == "BUY" && current_inventory > max_inventory_ * 0.9) {
+        quantity *= 0.3;  // Reduce buy quantity only when very close to limit
+    } else if (side == "SELL" && current_inventory < -max_inventory_ * 0.9) {
+        quantity *= 0.3;  // Reduce sell quantity only when very close to limit
+    } else {
+        // Increase quantity when we have room to build position
+        if (std::abs(current_inventory) < max_inventory_ * 0.3) {
+            quantity *= 1.5;  // Trade larger when we have inventory space
+        }
     }
     
     return quantity;
@@ -211,15 +216,15 @@ bool Strategy::shouldPlaceNewOrders(const OrderBookSnapshot& orderbook) const {
         return false;
     }
     
-    // Don't place orders if we have too many pending already
-    if (pending_orders_.size() >= 10) {
+    // Don't place orders if we have too many pending already - increased for HFT
+    if (pending_orders_.size() >= 50) {
         return false;
     }
     
-    // Check if we placed orders very recently (avoid overtrading)
-    if (hasRecentOrders()) {
-        return false;
-    }
+    // For HFT, we want to trade very frequently - remove recent order check
+    // if (hasRecentOrders()) {
+    //     return false;
+    // }
     
     return true;
 }
