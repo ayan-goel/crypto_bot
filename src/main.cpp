@@ -271,8 +271,8 @@ int main(int argc, char* argv[]) {
             order_manager.checkOrderStatuses();
             order_manager.cleanupExpiredOrders();
             
-            // Sleep briefly to avoid busy waiting
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            // Sleep very briefly for HFT - faster reaction time
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
         
         // Graceful shutdown

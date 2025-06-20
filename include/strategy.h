@@ -83,13 +83,13 @@ public:
 private:
     std::string symbol_;
     
-    // Strategy parameters
-    double spread_threshold_bps_ = 5.0;
+    // Strategy parameters - Optimized for HFT
+    double spread_threshold_bps_ = 0.1;
     double order_size_ = 0.001;
-    double max_inventory_ = 0.01;
-    double bid_offset_bps_ = 1.0;  // How far below best bid to place our bid
-    double ask_offset_bps_ = 1.0;  // How far above best ask to place our ask
-    double max_daily_drawdown_ = 20.0;
+    double max_inventory_ = 0.05;
+    double bid_offset_bps_ = 0.05;  // Very tight - get ahead of other market makers
+    double ask_offset_bps_ = 0.05;  // Very tight - get ahead of other market makers
+    double max_daily_drawdown_ = 50.0;
     
     // State
     Position current_position_;
