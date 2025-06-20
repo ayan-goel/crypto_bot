@@ -7,6 +7,7 @@
 #include <map>
 #include <future>
 #include <limits>
+#include <chrono>
 #include <hiredis/hiredis.h>
 
 // Forward declaration
@@ -19,12 +20,32 @@ struct OrderResponse {
     std::string error_message;
     double filled_quantity = 0.0;
     double avg_fill_price = 0.0;
+    
+    // Latency metrics
+    std::chrono::high_resolution_clock::time_point order_submit_time;
+    std::chrono::high_resolution_clock::time_point order_response_time;
+    double network_latency_ms = 0.0;
 };
 
 struct OrderStatusResponse {
     bool success = false;
     Order order;
     std::string error_message;
+};
+
+struct LatencyMetrics {
+    double avg_order_latency_ms = 0.0;
+    double min_order_latency_ms = std::numeric_limits<double>::max();
+    double max_order_latency_ms = 0.0;
+    double avg_fill_latency_ms = 0.0;
+    double min_fill_latency_ms = std::numeric_limits<double>::max();
+    double max_fill_latency_ms = 0.0;
+    double avg_network_latency_ms = 0.0;
+    double min_network_latency_ms = std::numeric_limits<double>::max();
+    double max_network_latency_ms = 0.0;
+    uint64_t total_orders = 0;
+    uint64_t total_fills = 0;
+    uint64_t total_latency_measurements = 0;
 };
 
 class OrderManager {
@@ -35,6 +56,13 @@ public:
     // Initialization
     bool initialize();
     void shutdown();
+    
+    // Latency testing
+    double measureNetworkLatency();
+    void startLatencyMonitoring();
+    void stopLatencyMonitoring();
+    LatencyMetrics getLatencyMetrics() const;
+    void printLatencyStats() const;
     
     // Order operations
     std::future<OrderResponse> placeOrder(const std::string& symbol, 
@@ -162,4 +190,17 @@ private:
     void initializeSession();
     void updateSessionStats(const Order& order, double spread_bps);
     void generateSessionSummary();
+    
+    // Latency tracking
+    mutable std::mutex latency_mutex_;
+    LatencyMetrics latency_metrics_;
+    std::vector<double> order_latencies_;
+    std::vector<double> fill_latencies_;
+    std::vector<double> network_latencies_;
+    bool latency_monitoring_enabled_ = false;
+    std::chrono::high_resolution_clock::time_point last_latency_test_;
+    
+    // Latency helper methods
+    void updateLatencyMetrics(double order_latency_ms, double fill_latency_ms = -1.0);
+    void updateNetworkLatencyMetrics(double network_latency_ms);
 }; 

@@ -115,6 +115,27 @@ int main(int argc, char* argv[]) {
         
         logger.info("API connectivity test successful");
         
+        // Start latency monitoring
+        order_manager.startLatencyMonitoring();
+        
+        // Perform initial network latency test
+        std::cout << "🔄 Testing network latency to Binance..." << std::endl;
+        double network_latency = order_manager.measureNetworkLatency();
+        if (network_latency > 0) {
+            std::cout << "✅ Initial latency test complete" << std::endl;
+            
+            // Latency performance assessment
+            if (network_latency < 10.0) {
+                std::cout << "🚀 EXCELLENT latency (<10ms) - Optimal for HFT" << std::endl;
+            } else if (network_latency < 50.0) {
+                std::cout << "✅ GOOD latency (<50ms) - Suitable for HFT" << std::endl;
+            } else if (network_latency < 100.0) {
+                std::cout << "⚠️  MODERATE latency (<100ms) - May impact HFT performance" << std::endl;
+            } else {
+                std::cout << "🐌 HIGH latency (>100ms) - Consider co-location for better performance" << std::endl;
+            }
+        }
+        
         // Set up WebSocket callbacks
         ws_client.setMessageCallback([&](const nlohmann::json& message) {
             try {
@@ -257,6 +278,11 @@ int main(int argc, char* argv[]) {
         // Graceful shutdown
         logger.info("Initiating graceful shutdown...");
         auto graceful_shutdown_start = std::chrono::steady_clock::now();
+        
+        // Print final latency statistics
+        std::cout << "\n🔄 Final latency performance report:" << std::endl;
+        order_manager.printLatencyStats();
+        order_manager.stopLatencyMonitoring();
 
         ws_client.stop();
         ws_client.disconnect();

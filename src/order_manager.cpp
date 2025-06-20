@@ -6,6 +6,8 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
+#include <curl/curl.h>
+#include <thread>
 
 OrderManager::OrderManager() : redis_context_(nullptr) {
     initializeSession();
@@ -190,6 +192,10 @@ bool OrderManager::isOrderExpired(const Order& order) const { return false; }
 OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::string& side, double price, double quantity) {
     OrderResponse response;
     
+    // Start latency measurement
+    auto order_start_time = std::chrono::high_resolution_clock::now();
+    response.order_submit_time = order_start_time;
+    
     // Validate order parameters
     if (!validateOrder(symbol, side, price, quantity)) {
         response.success = false;
@@ -224,9 +230,27 @@ OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::s
     saveOrderToRedis(order);
     
     // Simulate immediate fill for paper trading (in real trading, this would come from exchange)
+    auto fill_start_time = std::chrono::high_resolution_clock::now();
     if (true) { // Paper trading mode - simulate instant fills
         simulateOrderFill(order);
     }
+    auto fill_end_time = std::chrono::high_resolution_clock::now();
+    
+    // End latency measurement
+    auto order_end_time = std::chrono::high_resolution_clock::now();
+    response.order_response_time = order_end_time;
+    
+    // Calculate latencies
+    auto order_latency = std::chrono::duration_cast<std::chrono::microseconds>(order_end_time - order_start_time);
+    auto fill_latency = std::chrono::duration_cast<std::chrono::microseconds>(fill_end_time - fill_start_time);
+    
+    double order_latency_ms = order_latency.count() / 1000.0;
+    double fill_latency_ms = fill_latency.count() / 1000.0;
+    
+    response.network_latency_ms = order_latency_ms;
+    
+    // Update latency metrics
+    updateLatencyMetrics(order_latency_ms, fill_latency_ms);
     
     // Set response
     response.success = true;
@@ -236,7 +260,9 @@ OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::s
     response.avg_fill_price = price;
     
     std::cout << "🔥 ORDER EXECUTED: " << side << " " << quantity << " " << symbol 
-              << " @ $" << price << " [ID: " << client_order_id << "]" << std::endl;
+              << " @ $" << price << " [ID: " << client_order_id << "] "
+              << "(Order: " << std::fixed << std::setprecision(2) << order_latency_ms << "ms, "
+              << "Fill: " << fill_latency_ms << "ms)" << std::endl;
     
     return response;
 }
@@ -541,5 +567,185 @@ void OrderManager::generateSessionSummary() {
         std::cout << std::endl << "📊 Session Summary Generated: logs/session_summary.log" << std::endl;
         std::cout << "🎯 Total Trades: " << total_trades << " | PnL: $" << std::fixed << std::setprecision(4) << final_pnl 
                   << " | Duration: " << duration_seconds << "s" << std::endl;
+    }
+}
+
+// Helper function to discard CURL response data
+static size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    return size * nmemb;  // Just discard the data
+}
+
+// Latency tracking implementation
+double OrderManager::measureNetworkLatency() {
+    const int ping_count = 3;
+    double total_latency = 0.0;
+    int successful_pings = 0;
+    
+    for (int i = 0; i < ping_count; i++) {
+        auto start_time = std::chrono::high_resolution_clock::now();
+        
+        // Simple HTTPS GET request to Binance timestamp endpoint
+        // This measures network round-trip time to Binance
+        CURL* curl = curl_easy_init();
+        if (curl) {
+            curl_easy_setopt(curl, CURLOPT_URL, "https://api.binance.com/api/v3/time");
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, nullptr);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
+            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);  // Disable SSL verification for simplicity
+            
+            CURLcode res = curl_easy_perform(curl);
+            auto end_time = std::chrono::high_resolution_clock::now();
+            
+            if (res == CURLE_OK) {
+                auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                double latency_ms = duration.count() / 1000.0;
+                total_latency += latency_ms;
+                successful_pings++;
+            } else {
+                std::cout << "CURL error: " << curl_easy_strerror(res) << std::endl;
+            }
+            
+            curl_easy_cleanup(curl);
+        }
+        
+        // Small delay between pings
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
+    
+    double avg_latency = (successful_pings > 0) ? (total_latency / successful_pings) : -1.0;
+    
+    if (avg_latency > 0) {
+        updateNetworkLatencyMetrics(avg_latency);
+        std::cout << "🌐 Network latency to Binance: " << std::fixed << std::setprecision(2) 
+                  << avg_latency << "ms (avg of " << successful_pings << " pings)" << std::endl;
+    } else {
+        std::cout << "❌ Failed to measure network latency" << std::endl;
+    }
+    
+    return avg_latency;
+}
+
+void OrderManager::startLatencyMonitoring() {
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    latency_monitoring_enabled_ = true;
+    std::cout << "✅ Latency monitoring enabled" << std::endl;
+}
+
+void OrderManager::stopLatencyMonitoring() {
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    latency_monitoring_enabled_ = false;
+    std::cout << "⏹️  Latency monitoring disabled" << std::endl;
+}
+
+LatencyMetrics OrderManager::getLatencyMetrics() const {
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    return latency_metrics_;
+}
+
+void OrderManager::printLatencyStats() const {
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    
+    std::cout << "\n📊 LATENCY PERFORMANCE METRICS:" << std::endl;
+    std::cout << std::string(50, '-') << std::endl;
+    
+    // Network latency
+    std::cout << "🌐 Network Latency:" << std::endl;
+    if (latency_metrics_.total_latency_measurements > 0) {
+        std::cout << "  Average: " << std::fixed << std::setprecision(2) << latency_metrics_.avg_network_latency_ms << "ms" << std::endl;
+        std::cout << "  Range: " << std::fixed << std::setprecision(2) << latency_metrics_.min_network_latency_ms 
+                  << " - " << latency_metrics_.max_network_latency_ms << "ms" << std::endl;
+        std::cout << "  Measurements: " << latency_metrics_.total_latency_measurements << std::endl;
+    } else {
+        std::cout << "  No network latency data available" << std::endl;
+    }
+    
+    // Order execution latency
+    std::cout << "\n⚡ Order Execution Latency:" << std::endl;
+    if (latency_metrics_.total_orders > 0) {
+        std::cout << "  Average: " << std::fixed << std::setprecision(2) << latency_metrics_.avg_order_latency_ms << "ms" << std::endl;
+        std::cout << "  Range: " << std::fixed << std::setprecision(2) << latency_metrics_.min_order_latency_ms 
+                  << " - " << latency_metrics_.max_order_latency_ms << "ms" << std::endl;
+        std::cout << "  Total Orders: " << latency_metrics_.total_orders << std::endl;
+    } else {
+        std::cout << "  No order latency data available" << std::endl;
+    }
+    
+    // Fill latency
+    std::cout << "\n🎯 Order Fill Latency:" << std::endl;
+    if (latency_metrics_.total_fills > 0) {
+        std::cout << "  Average: " << std::fixed << std::setprecision(2) << latency_metrics_.avg_fill_latency_ms << "ms" << std::endl;
+        std::cout << "  Range: " << std::fixed << std::setprecision(2) << latency_metrics_.min_fill_latency_ms 
+                  << " - " << latency_metrics_.max_fill_latency_ms << "ms" << std::endl;
+        std::cout << "  Total Fills: " << latency_metrics_.total_fills << std::endl;
+    } else {
+        std::cout << "  No fill latency data available" << std::endl;
+    }
+    
+    std::cout << std::string(50, '-') << std::endl;
+}
+
+void OrderManager::updateLatencyMetrics(double order_latency_ms, double fill_latency_ms) {
+    if (!latency_monitoring_enabled_) return;
+    
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    
+    // Update order latency metrics
+    if (order_latency_ms > 0) {
+        order_latencies_.push_back(order_latency_ms);
+        latency_metrics_.total_orders++;
+        
+        if (latency_metrics_.total_orders == 1) {
+            latency_metrics_.min_order_latency_ms = order_latency_ms;
+            latency_metrics_.max_order_latency_ms = order_latency_ms;
+            latency_metrics_.avg_order_latency_ms = order_latency_ms;
+        } else {
+            latency_metrics_.min_order_latency_ms = std::min(latency_metrics_.min_order_latency_ms, order_latency_ms);
+            latency_metrics_.max_order_latency_ms = std::max(latency_metrics_.max_order_latency_ms, order_latency_ms);
+            
+            // Running average
+            double total = latency_metrics_.avg_order_latency_ms * (latency_metrics_.total_orders - 1) + order_latency_ms;
+            latency_metrics_.avg_order_latency_ms = total / latency_metrics_.total_orders;
+        }
+    }
+    
+    // Update fill latency metrics
+    if (fill_latency_ms > 0) {
+        fill_latencies_.push_back(fill_latency_ms);
+        latency_metrics_.total_fills++;
+        
+        if (latency_metrics_.total_fills == 1) {
+            latency_metrics_.min_fill_latency_ms = fill_latency_ms;
+            latency_metrics_.max_fill_latency_ms = fill_latency_ms;
+            latency_metrics_.avg_fill_latency_ms = fill_latency_ms;
+        } else {
+            latency_metrics_.min_fill_latency_ms = std::min(latency_metrics_.min_fill_latency_ms, fill_latency_ms);
+            latency_metrics_.max_fill_latency_ms = std::max(latency_metrics_.max_fill_latency_ms, fill_latency_ms);
+            
+            // Running average
+            double total = latency_metrics_.avg_fill_latency_ms * (latency_metrics_.total_fills - 1) + fill_latency_ms;
+            latency_metrics_.avg_fill_latency_ms = total / latency_metrics_.total_fills;
+        }
+    }
+}
+
+void OrderManager::updateNetworkLatencyMetrics(double network_latency_ms) {
+    std::lock_guard<std::mutex> lock(latency_mutex_);
+    
+    network_latencies_.push_back(network_latency_ms);
+    latency_metrics_.total_latency_measurements++;
+    
+    if (latency_metrics_.total_latency_measurements == 1) {
+        latency_metrics_.min_network_latency_ms = network_latency_ms;
+        latency_metrics_.max_network_latency_ms = network_latency_ms;
+        latency_metrics_.avg_network_latency_ms = network_latency_ms;
+    } else {
+        latency_metrics_.min_network_latency_ms = std::min(latency_metrics_.min_network_latency_ms, network_latency_ms);
+        latency_metrics_.max_network_latency_ms = std::max(latency_metrics_.max_network_latency_ms, network_latency_ms);
+        
+        // Running average
+        double total = latency_metrics_.avg_network_latency_ms * (latency_metrics_.total_latency_measurements - 1) + network_latency_ms;
+        latency_metrics_.avg_network_latency_ms = total / latency_metrics_.total_latency_measurements;
     }
 }  
