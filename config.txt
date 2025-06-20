@@ -5,43 +5,43 @@ BINANCE_SECRET_KEY=your_secret_key_here
 # Trading Environment (testnet or mainnet)
 USE_TESTNET=true
 BINANCE_BASE_URL=https://testnet.binance.vision
-BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@bookTicker
+BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@depth10@100ms
 
 # Trading Pair Configuration
 TRADING_SYMBOL=ETHUSDT
 BASE_ASSET=ETH
 QUOTE_ASSET=USDT
 
-# Strategy Parameters - Maximum aggressiveness for paper trading
+# Strategy Parameters - Ultra-aggressive HFT
 SPREAD_THRESHOLD_BPS=0.01
-ORDER_SIZE=0.0005
+ORDER_SIZE=0.005
 MAX_INVENTORY=0.1
-ORDER_REFRESH_INTERVAL_MS=1
-ORDER_TIMEOUT_SECONDS=1
+ORDER_REFRESH_INTERVAL_MS=10
+ORDER_TIMEOUT_SECONDS=2
 
-# Risk Management - Increased for high frequency paper trading
-MAX_DAILY_LOSS_LIMIT=50.0
-MAX_DRAWDOWN_LIMIT=25.0
+# Risk Management - Ultra-aggressive HFT limits
+MAX_DAILY_LOSS_LIMIT=25.0
+MAX_DRAWDOWN_LIMIT=15.0
 POSITION_LIMIT_ETHUSDT=1.0
 ORDER_RATE_LIMIT=1000
-ENABLE_CIRCUIT_BREAKER=false
-RISK_MONITORING=false
+ENABLE_CIRCUIT_BREAKER=true
+RISK_MONITORING=true
 
 # System Configuration
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_DB=0
 
-# Logging Configuration - Reduced for performance
-LOG_LEVEL=WARNING
-LOG_TO_FILE=false
+# Logging Configuration
+LOG_LEVEL=INFO
+LOG_TO_FILE=true
 LOG_TO_CONSOLE=true
 
-# Performance Settings - Maximum speed
-ORDERBOOK_DEPTH=5
-WEBSOCKET_PING_INTERVAL=5
-REST_TIMEOUT_SECONDS=1
-MAX_RECONNECT_ATTEMPTS=2
+# Performance Settings - Optimized for HFT
+ORDERBOOK_DEPTH=20
+WEBSOCKET_PING_INTERVAL=10
+REST_TIMEOUT_SECONDS=2
+MAX_RECONNECT_ATTEMPTS=3
 
 # Development Settings
 PAPER_TRADING=true

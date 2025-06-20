@@ -17,15 +17,16 @@ StrategySignal Strategy::generateSignal(const OrderBookSnapshot& orderbook) {
         return signal;
     }
     
-    // Check if spread is wide enough for profitable market making
-    if (orderbook.spread_bps <= spread_threshold_bps_) {
-        signal.reason = "Spread too narrow (" + std::to_string(orderbook.spread_bps) + " bps < " + std::to_string(spread_threshold_bps_) + " bps)";
-        return signal;
-    }
+    // For HFT, always try to place orders regardless of spread
+    // Remove spread threshold check to be more aggressive
+    // if (orderbook.spread_bps <= spread_threshold_bps_) {
+    //     signal.reason = "Spread too narrow (" + std::to_string(orderbook.spread_bps) + " bps < " + std::to_string(spread_threshold_bps_) + " bps)";
+    //     return signal;
+    // }
     
-    // Check if we should avoid placing new orders (risk management)
-    if (!shouldPlaceNewOrders(orderbook)) {
-        signal.reason = "Risk limits prevent new orders";
+    // For HFT, be very aggressive - only check basic risk limits
+    if (circuit_breaker_triggered_) {
+        signal.reason = "Circuit breaker triggered";
         return signal;
     }
     
@@ -37,25 +38,20 @@ StrategySignal Strategy::generateSignal(const OrderBookSnapshot& orderbook) {
     double bid_quantity = calculateOrderQuantity("BUY");
     double ask_quantity = calculateOrderQuantity("SELL");
     
-    // Check inventory limits before placing orders
+    // For HFT, always place orders on both sides unless severely constrained
     bool can_place_bid = isInventoryWithinLimits(bid_quantity);
     bool can_place_ask = isInventoryWithinLimits(-ask_quantity);
     
-    // Generate signal
-    if (can_place_bid) {
-        signal.should_place_bid = true;
-        signal.bid_price = optimal_bid;
-        signal.bid_quantity = bid_quantity;
-    }
-    
-    if (can_place_ask) {
-        signal.should_place_ask = true;
-        signal.ask_price = optimal_ask;
-        signal.ask_quantity = ask_quantity;
-    }
+    // Always try to place both sides - be very aggressive
+    signal.should_place_bid = can_place_bid;
+    signal.should_place_ask = can_place_ask;
+    signal.bid_price = optimal_bid;
+    signal.ask_price = optimal_ask;
+    signal.bid_quantity = bid_quantity;
+    signal.ask_quantity = ask_quantity;
     
     if (signal.should_place_bid || signal.should_place_ask) {
-        signal.reason = "Market making signal - spread " + std::to_string(orderbook.spread_bps) + " bps";
+        signal.reason = "HFT market making - spread " + std::to_string(orderbook.spread_bps) + " bps";
     } else {
         signal.reason = "Inventory limits prevent orders";
     }
@@ -89,8 +85,9 @@ bool Strategy::isWithinRiskLimits(const StrategySignal& signal) const {
 bool Strategy::isInventoryWithinLimits(double additional_quantity) const {
     double new_position = current_position_.quantity + additional_quantity;
     
-    // Check if new position would exceed limits
-    if (std::abs(new_position) > max_inventory_) {
+    // For HFT, be much more permissive with inventory limits
+    // Only block if we would severely exceed limits
+    if (std::abs(new_position) > max_inventory_ * 2.0) {
         return false;
     }
     
@@ -173,33 +170,28 @@ bool Strategy::isCircuitBreakerTriggered() const {
 }
 
 double Strategy::calculateOptimalBidPrice(const OrderBookSnapshot& orderbook) const {
-    // Place bid slightly below best bid to be competitive
+    // For HFT, place bid ABOVE best bid to get ahead of queue
     double offset = orderbook.best_bid_price * (bid_offset_bps_ / 10000.0);
-    return orderbook.best_bid_price - offset;
+    return orderbook.best_bid_price + offset;
 }
 
 double Strategy::calculateOptimalAskPrice(const OrderBookSnapshot& orderbook) const {
-    // Place ask slightly above best ask to be competitive
+    // For HFT, place ask BELOW best ask to get ahead of queue
     double offset = orderbook.best_ask_price * (ask_offset_bps_ / 10000.0);
-    return orderbook.best_ask_price + offset;
+    return orderbook.best_ask_price - offset;
 }
 
 double Strategy::calculateOrderQuantity(const std::string& side) const {
-    // Use fixed order size optimized for HFT
+    // Use configured order size
     double quantity = order_size_;
     
-    // For HFT, be more aggressive with inventory management
+    // Don't reduce quantity much - we want maximum trading
     double current_inventory = current_position_.quantity;
     
-    if (side == "BUY" && current_inventory > max_inventory_ * 0.9) {
-        quantity *= 0.3;  // Reduce buy quantity only when very close to limit
-    } else if (side == "SELL" && current_inventory < -max_inventory_ * 0.9) {
-        quantity *= 0.3;  // Reduce sell quantity only when very close to limit
-    } else {
-        // Increase quantity when we have room to build position
-        if (std::abs(current_inventory) < max_inventory_ * 0.3) {
-            quantity *= 1.5;  // Trade larger when we have inventory space
-        }
+    if (side == "BUY" && current_inventory > max_inventory_ * 1.5) {
+        quantity *= 0.5;  // Only reduce when way over limit
+    } else if (side == "SELL" && current_inventory < -max_inventory_ * 1.5) {
+        quantity *= 0.5;  // Only reduce when way over limit
     }
     
     return quantity;

@@ -5,34 +5,55 @@ OrderBook::OrderBook(const std::string& symbol) : symbol_(symbol) {
     last_update_time_ = std::chrono::system_clock::now();
 }
 
-bool OrderBook::updateFromWebSocket(const nlohmann::json& ticker_data) {
+bool OrderBook::updateFromWebSocket(const nlohmann::json& depth_data) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     try {
-        // Check if this is a Binance bookTicker stream message
-        if (!ticker_data.contains("stream") || !ticker_data.contains("data")) {
+        // Check if this is a Binance depth stream message
+        if (!depth_data.contains("stream") || !depth_data.contains("data")) {
             return false;
         }
         
-        const auto& data = ticker_data["data"];
+        const auto& data = depth_data["data"];
         
-        // Verify it's a bookTicker update (faster than depth)
-        if (!data.contains("b") || !data.contains("a")) {
+        // Verify it's a depth update
+        if (!data.contains("bids") || !data.contains("asks")) {
             return false;
         }
         
-        // Extract best bid and ask from bookTicker
-        double best_bid_price = std::stod(data["b"].get<std::string>());
-        double best_bid_qty = std::stod(data["B"].get<std::string>());
-        double best_ask_price = std::stod(data["a"].get<std::string>());
-        double best_ask_qty = std::stod(data["A"].get<std::string>());
+        // Build fresh maps for this snapshot to avoid stale levels and crossed books
+        std::map<double, double, std::greater<double>> new_bids;
+        std::map<double, double> new_asks;
         
-        // For HFT, we only need the best prices - create minimal order book
-        bids_.clear();
-        asks_.clear();
+        // Process bids array
+        if (data["bids"].is_array()) {
+            for (const auto& bid : data["bids"]) {
+                if (bid.is_array() && bid.size() >= 2) {
+                    double price = std::stod(bid[0].get<std::string>());
+                    double quantity = std::stod(bid[1].get<std::string>());
+                    if (quantity > 0.0) {
+                        new_bids[price] = quantity;
+                    }
+                }
+            }
+        }
         
-        bids_[best_bid_price] = best_bid_qty;
-        asks_[best_ask_price] = best_ask_qty;
+        // Process asks array
+        if (data["asks"].is_array()) {
+            for (const auto& ask : data["asks"]) {
+                if (ask.is_array() && ask.size() >= 2) {
+                    double price = std::stod(ask[0].get<std::string>());
+                    double quantity = std::stod(ask[1].get<std::string>());
+                    if (quantity > 0.0) {
+                        new_asks[price] = quantity;
+                    }
+                }
+            }
+        }
+        
+        // Replace existing maps with the fresh snapshot
+        bids_.swap(new_bids);
+        asks_.swap(new_asks);
         
         last_update_time_ = std::chrono::system_clock::now();
         update_count_++;
@@ -41,7 +62,7 @@ bool OrderBook::updateFromWebSocket(const nlohmann::json& ticker_data) {
         return true;
         
     } catch (const std::exception& e) {
-        std::cout << "Error processing WebSocket bookTicker data: " << e.what() << std::endl;
+        std::cout << "Error processing WebSocket depth data: " << e.what() << std::endl;
         return false;
     }
 }
