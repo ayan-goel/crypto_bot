@@ -92,8 +92,16 @@ double Config::getMaxDailyDrawdown() const {
     return getDouble("MAX_DAILY_DRAWDOWN", 20.0);
 }
 
+double Config::getMaxDailyLossLimit() const {
+    return getDouble("MAX_DAILY_LOSS_LIMIT", 5.0);
+}
+
 double Config::getPositionLimit() const {
     return getDouble("POSITION_LIMIT", 0.1);
+}
+
+int Config::getOrderRateLimit() const {
+    return getInt("ORDER_RATE_LIMIT", 100);
 }
 
 bool Config::isCircuitBreakerEnabled() const {
@@ -154,6 +162,11 @@ bool Config::isPaperTrading() const {
 
 bool Config::isDebuggingEnabled() const {
     return getBool("ENABLE_DEBUGGING", false);
+}
+
+// Generic config getter
+std::string Config::getConfig(const std::string& key, const std::string& default_val) const {
+    return getString(key, default_val);
 }
 
 // Helper methods

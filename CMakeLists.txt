@@ -40,8 +40,8 @@ pkg_check_modules(HIREDIS REQUIRED hiredis)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBWEBSOCKETS REQUIRED libwebsockets)
 
-# Add executable
-set(SOURCES
+# Add executables
+set(LEGACY_SOURCES
     src/main.cpp
     src/config.cpp
     src/logger.cpp
@@ -53,10 +53,37 @@ set(SOURCES
     src/risk_manager.cpp
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+set(HFT_SOURCES
+    src/hft_main.cpp
+    src/hft_engine.cpp
+    src/config.cpp
+    src/logger.cpp
+    src/order_manager.cpp
+    src/risk_manager.cpp
+    src/websocket_client.cpp
+    src/rest_client.cpp
+    src/order_book.cpp
+)
 
-# Link libraries
+# Legacy bot (original architecture)
+add_executable(${PROJECT_NAME} ${LEGACY_SOURCES})
+
+# New HFT engine (ultra high-frequency)
+add_executable(crypto_hft_engine ${HFT_SOURCES})
+
+# Link libraries for both executables
 target_link_libraries(${PROJECT_NAME}
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    CURL::libcurl
+    nlohmann_json::nlohmann_json
+    ${HIREDIS_LIBRARIES}
+    ${LIBWEBSOCKETS_LIBRARIES}
+    z  # zlib for compression
+    pthread
+)
+
+target_link_libraries(crypto_hft_engine
     OpenSSL::SSL
     OpenSSL::Crypto
     CURL::libcurl
@@ -69,13 +96,17 @@ target_link_libraries(${PROJECT_NAME}
 
 # Include directories for hiredis
 target_include_directories(${PROJECT_NAME} PRIVATE ${HIREDIS_INCLUDE_DIRS})
+target_include_directories(crypto_hft_engine PRIVATE ${HIREDIS_INCLUDE_DIRS})
 
 # Set compile flags for hiredis
 target_compile_options(${PROJECT_NAME} PRIVATE ${HIREDIS_CFLAGS_OTHER})
+target_compile_options(crypto_hft_engine PRIVATE ${HIREDIS_CFLAGS_OTHER})
 
 # Include directories and flags for libwebsockets
 target_include_directories(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_INCLUDE_DIRS})
+target_include_directories(crypto_hft_engine PRIVATE ${LIBWEBSOCKETS_INCLUDE_DIRS})
 target_compile_options(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_CFLAGS_OTHER})
+target_compile_options(crypto_hft_engine PRIVATE ${LIBWEBSOCKETS_CFLAGS_OTHER})
 
 # Installation
 install(TARGETS ${PROJECT_NAME} DESTINATION bin) 
