@@ -151,43 +151,46 @@ int main(int argc, char* argv[]) {
                                           snapshot.best_bid_quantity, 
                                           snapshot.best_ask_quantity);
                         
-                        // Generate trading signal
+                        // ULTRA-AGGRESSIVE HFT: Trade on EVERY market update
+                        // Generate multiple trading signals for scalping
                         auto signal = strategy.generateSignal(snapshot);
                         
                         // Debug: Always log the signal reason
                         std::cout << "📈 SIGNAL: " << signal.reason 
                                   << " (Spread: " << snapshot.spread_bps << " bps)" << std::endl;
                         
-                        // Process signal - now with risk management!
-                        if (signal.should_place_bid || signal.should_place_ask) {
-                            logger.info("Trading signal generated: " + signal.reason);
+                        // ALWAYS try to place multiple orders for maximum frequency
+                        // Place orders at multiple price levels for scalping
+                        double base_quantity = 0.001;  // Small scalping size
+                        
+                        // Place multiple BUY orders at different levels
+                        for (int i = 0; i < 3; i++) {
+                            double price_offset = 0.01 * (i + 1);  // 1 cent, 2 cents, 3 cents below ask
+                            double buy_price = snapshot.best_ask_price - price_offset;
                             
-                            // Execute orders through order manager with risk checks
-                            if (signal.should_place_bid) {
-                                std::string rejection_reason;
-                                if (risk_manager.canPlaceOrder(symbol, "BUY", signal.bid_price, signal.bid_quantity, rejection_reason)) {
-                                    auto future_response = order_manager.placeOrder(symbol, "BUY", signal.bid_price, signal.bid_quantity);
-                                    auto response = future_response.get();
-                                    if (response.success) {
-                                        risk_manager.updatePosition(symbol, signal.bid_quantity, signal.bid_price, "BUY");
-                                        risk_manager.recordOrderPlaced();
-                                    }
-                                } else {
-                                    logger.warning("BUY order rejected by risk manager: " + rejection_reason);
+                            std::string rejection_reason;
+                            if (risk_manager.canPlaceOrder(symbol, "BUY", buy_price, base_quantity, rejection_reason)) {
+                                auto future_response = order_manager.placeOrder(symbol, "BUY", buy_price, base_quantity);
+                                auto response = future_response.get();
+                                if (response.success) {
+                                    risk_manager.updatePosition(symbol, base_quantity, buy_price, "BUY");
+                                    risk_manager.recordOrderPlaced();
                                 }
                             }
+                        }
+                        
+                        // Place multiple SELL orders at different levels
+                        for (int i = 0; i < 3; i++) {
+                            double price_offset = 0.01 * (i + 1);  // 1 cent, 2 cents, 3 cents above bid
+                            double sell_price = snapshot.best_bid_price + price_offset;
                             
-                            if (signal.should_place_ask) {
-                                std::string rejection_reason;
-                                if (risk_manager.canPlaceOrder(symbol, "SELL", signal.ask_price, signal.ask_quantity, rejection_reason)) {
-                                    auto future_response = order_manager.placeOrder(symbol, "SELL", signal.ask_price, signal.ask_quantity);
-                                    auto response = future_response.get();
-                                    if (response.success) {
-                                        risk_manager.updatePosition(symbol, signal.ask_quantity, signal.ask_price, "SELL");
-                                        risk_manager.recordOrderPlaced();
-                                    }
-                                } else {
-                                    logger.warning("SELL order rejected by risk manager: " + rejection_reason);
+                            std::string rejection_reason;
+                            if (risk_manager.canPlaceOrder(symbol, "SELL", sell_price, base_quantity, rejection_reason)) {
+                                auto future_response = order_manager.placeOrder(symbol, "SELL", sell_price, base_quantity);
+                                auto response = future_response.get();
+                                if (response.success) {
+                                    risk_manager.updatePosition(symbol, base_quantity, sell_price, "SELL");
+                                    risk_manager.recordOrderPlaced();
                                 }
                             }
                         }
