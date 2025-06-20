@@ -154,9 +154,9 @@ int main(int argc, char* argv[]) {
                         // Generate trading signal
                         auto signal = strategy.generateSignal(snapshot);
                         
-                        // Minimal signal logging for HFT performance
-                        // std::cout << "📈 SIGNAL: " << signal.reason 
-                        //           << " (Spread: " << snapshot.spread_bps << " bps)" << std::endl;
+                        // Debug: Always log the signal reason
+                        std::cout << "📈 SIGNAL: " << signal.reason 
+                                  << " (Spread: " << snapshot.spread_bps << " bps)" << std::endl;
                         
                         // Process signal - now with risk management!
                         if (signal.should_place_bid || signal.should_place_ask) {
