@@ -5,43 +5,43 @@ BINANCE_SECRET_KEY=your_secret_key_here
 # Trading Environment (testnet or mainnet)
 USE_TESTNET=true
 BINANCE_BASE_URL=https://testnet.binance.vision
-BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@depth10@100ms
+BINANCE_WS_URL=wss://stream.testnet.binance.vision/stream?streams=ethusdt@bookTicker
 
 # Trading Pair Configuration
 TRADING_SYMBOL=ETHUSDT
 BASE_ASSET=ETH
 QUOTE_ASSET=USDT
 
-# Strategy Parameters - Optimized for HFT with 10ms latency
-SPREAD_THRESHOLD_BPS=0.1
-ORDER_SIZE=0.001
-MAX_INVENTORY=0.05
-ORDER_REFRESH_INTERVAL_MS=25
-ORDER_TIMEOUT_SECONDS=5
+# Strategy Parameters - Maximum aggressiveness for paper trading
+SPREAD_THRESHOLD_BPS=0.01
+ORDER_SIZE=0.0005
+MAX_INVENTORY=0.1
+ORDER_REFRESH_INTERVAL_MS=1
+ORDER_TIMEOUT_SECONDS=1
 
-# Risk Management - Increased for higher frequency
-MAX_DAILY_LOSS_LIMIT=10.0
-MAX_DRAWDOWN_LIMIT=5.0
-POSITION_LIMIT_ETHUSDT=0.5
-ORDER_RATE_LIMIT=200
-ENABLE_CIRCUIT_BREAKER=true
-RISK_MONITORING=true
+# Risk Management - Increased for high frequency paper trading
+MAX_DAILY_LOSS_LIMIT=50.0
+MAX_DRAWDOWN_LIMIT=25.0
+POSITION_LIMIT_ETHUSDT=1.0
+ORDER_RATE_LIMIT=1000
+ENABLE_CIRCUIT_BREAKER=false
+RISK_MONITORING=false
 
 # System Configuration
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 REDIS_DB=0
 
-# Logging Configuration
-LOG_LEVEL=INFO
-LOG_TO_FILE=true
+# Logging Configuration - Reduced for performance
+LOG_LEVEL=WARNING
+LOG_TO_FILE=false
 LOG_TO_CONSOLE=true
 
-# Performance Settings - Optimized for HFT
-ORDERBOOK_DEPTH=20
-WEBSOCKET_PING_INTERVAL=10
-REST_TIMEOUT_SECONDS=2
-MAX_RECONNECT_ATTEMPTS=3
+# Performance Settings - Maximum speed
+ORDERBOOK_DEPTH=5
+WEBSOCKET_PING_INTERVAL=5
+REST_TIMEOUT_SECONDS=1
+MAX_RECONNECT_ATTEMPTS=2
 
 # Development Settings
 PAPER_TRADING=true
