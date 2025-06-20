@@ -29,7 +29,9 @@ public:
     
     // Risk management
     double getMaxDailyDrawdown() const;
+    double getMaxDailyLossLimit() const;
     double getPositionLimit() const;
+    int getOrderRateLimit() const;
     bool isCircuitBreakerEnabled() const;
     
     // System configuration
@@ -52,6 +54,9 @@ public:
     bool isTestnet() const;
     bool isPaperTrading() const;
     bool isDebuggingEnabled() const;
+    
+    // Generic config getter
+    std::string getConfig(const std::string& key, const std::string& default_val = "") const;
 
 private:
     Config() = default;

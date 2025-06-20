@@ -122,9 +122,31 @@ bool OrderManager::removeOrderFromRedis(const std::string& order_id) { return tr
 
 void OrderManager::printStats() const {}
 size_t OrderManager::getPendingOrderCount() const { return 0; }
-double OrderManager::getTotalVolume() const { return 0.0; }
+double OrderManager::getTotalVolume() const {
+    std::lock_guard<std::mutex> lock(orders_mutex_);
+    return total_volume_;
+}
 
-bool OrderManager::isHealthy() const { return true; }
+// Live metrics getters for HFT monitoring
+uint64_t OrderManager::getTotalTrades() const {
+    std::lock_guard<std::mutex> lock(session_mutex_);
+    return buy_trades_ + sell_trades_;
+}
+
+double OrderManager::getCurrentPnL() const {
+    std::lock_guard<std::mutex> lock(pnl_mutex_);
+    return cumulative_pnl_;
+}
+
+double OrderManager::getCurrentPosition() const {
+    std::lock_guard<std::mutex> lock(pnl_mutex_);
+    return current_position_;
+}
+
+bool OrderManager::isHealthy() const {
+    std::lock_guard<std::mutex> lock(orders_mutex_);
+    return true;
+}
 std::string OrderManager::getHealthStatus() const { return "HEALTHY"; }
 
 bool OrderManager::connectToRedis() {
@@ -259,11 +281,6 @@ OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::s
     response.filled_quantity = quantity;
     response.avg_fill_price = price;
     
-    std::cout << "🔥 ORDER EXECUTED: " << side << " " << quantity << " " << symbol 
-              << " @ $" << price << " [ID: " << client_order_id << "] "
-              << "(Order: " << std::fixed << std::setprecision(2) << order_latency_ms << "ms, "
-              << "Fill: " << fill_latency_ms << "ms)" << std::endl;
-    
     return response;
 }
 
@@ -315,10 +332,6 @@ void OrderManager::simulateOrderFill(Order& order) {
     
     // Update the tracked order
     updateTrackedOrder(order);
-    
-    std::cout << "✅ TRADE FILLED: " << order.side << " " << order.filled_quantity 
-              << " " << order.symbol << " @ $" << order.price 
-              << " [ID: " << order.order_id << "]" << std::endl;
 }
 
 void OrderManager::logTrade(const Order& order) {
@@ -358,18 +371,21 @@ void OrderManager::updatePositionAndPnL(const Order& order) {
     // Update position
     current_position_ += quantity_signed;
     
-    // Calculate realized PnL for this trade
+    // Calculate realized PnL for this trade using ACTUAL PRICES
     double realized_pnl = 0.0;
-    if (order.side == "SELL" && current_position_ < previous_position_) {
-        // Selling - calculate profit/loss
+    
+    if (order.side == "SELL" && previous_position_ > 0) {
+        // We're selling - calculate profit/loss against average buy price
         realized_pnl = (order.price - avg_buy_price_) * order.filled_quantity;
     } else if (order.side == "BUY") {
-        // Update average buy price
+        // We're buying - this is a cost, update average buy price
         if (current_position_ > 0) {
-            avg_buy_price_ = ((avg_buy_price_ * previous_position_) + trade_value) / current_position_;
+            avg_buy_price_ = ((avg_buy_price_ * std::abs(previous_position_)) + trade_value) / std::abs(current_position_);
         } else {
             avg_buy_price_ = order.price;
         }
+        // No immediate PnL on buy - we'll realize it when we sell
+        realized_pnl = 0.0;
     }
     
     // Update cumulative PnL

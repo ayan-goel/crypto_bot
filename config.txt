@@ -1,3 +1,29 @@
+# Trading Configuration for HFT Crypto Bot
+# Capital and Position Management
+INITIAL_CAPITAL=50.0
+ORDER_SIZE=0.001
+MAX_INVENTORY=0.015
+POSITION_LIMIT_ETHUSDT=0.02
+
+# Market Making Strategy
+SPREAD_THRESHOLD_BPS=1.0
+ORDER_REFRESH_INTERVAL_MS=50
+ORDER_RATE_LIMIT=300
+
+# Risk Management - TIGHTER CONTROLS
+MAX_DAILY_LOSS_LIMIT=3.0
+MAX_DRAWDOWN_LIMIT=2.0
+CIRCUIT_BREAKER_LOSS=2.5
+
+# WebSocket and API
+WEBSOCKET_UPDATE_INTERVAL_MS=100
+API_BASE_URL=https://testnet.binance.vision
+
+# Logging
+LOG_LEVEL=INFO
+LOG_TO_FILE=true
+LOG_FILENAME=logs/hft_session.log
+
 # Binance API Configuration
 BINANCE_API_KEY=your_api_key_here
 BINANCE_SECRET_KEY=your_secret_key_here
@@ -12,20 +38,15 @@ TRADING_SYMBOL=ETHUSDT
 BASE_ASSET=ETH
 QUOTE_ASSET=USDT
 
-# Strategy Parameters - Ultra-aggressive HFT
-SPREAD_THRESHOLD_BPS=0.01
-ORDER_SIZE=0.005
-MAX_INVENTORY=0.1
-ORDER_REFRESH_INTERVAL_MS=10
-ORDER_TIMEOUT_SECONDS=2
+# Strategy Parameters - Optimized for better rebalancing
+ORDER_TIMEOUT_SECONDS=1
 
-# Risk Management - Ultra-aggressive HFT limits
-MAX_DAILY_LOSS_LIMIT=25.0
-MAX_DRAWDOWN_LIMIT=15.0
-POSITION_LIMIT_ETHUSDT=1.0
-ORDER_RATE_LIMIT=1000
+# Risk Management - Balanced for $50 capital with better position management
 ENABLE_CIRCUIT_BREAKER=true
 RISK_MONITORING=true
+
+# Capital Management
+CAPITAL_ALLOCATION_PERCENT=100.0
 
 # System Configuration
 REDIS_HOST=127.0.0.1
@@ -33,11 +54,9 @@ REDIS_PORT=6379
 REDIS_DB=0
 
 # Logging Configuration
-LOG_LEVEL=INFO
-LOG_TO_FILE=true
 LOG_TO_CONSOLE=true
 
-# Performance Settings - Optimized for HFT
+# Performance Settings - HFT optimized
 ORDERBOOK_DEPTH=20
 WEBSOCKET_PING_INTERVAL=10
 REST_TIMEOUT_SECONDS=2

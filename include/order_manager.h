@@ -101,6 +101,11 @@ public:
     size_t getPendingOrderCount() const;
     double getTotalVolume() const;
     
+    // Live metrics getters for HFT monitoring
+    uint64_t getTotalTrades() const;
+    double getCurrentPnL() const;
+    double getCurrentPosition() const;
+    
     // Health monitoring
     bool isHealthy() const;
     std::string getHealthStatus() const;
