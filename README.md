@@ -1,10 +1,5 @@
 # 🚀 High-Frequency Cryptocurrency Trading Bot
 
-[![Build Status](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/yourusername/crypto_bot)
-[![Language](https://img.shields.io/badge/language-C%2B%2B17-blue.svg)](https://en.cppreference.com/w/cpp/17)
-[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS-lightgrey.svg)](https://github.com/yourusername/crypto_bot)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-
 A sophisticated, ultra-low-latency cryptocurrency trading bot built in C++17, designed for high-frequency trading (HFT) with institutional-grade performance. Features advanced market making strategies, real-time risk management, and microsecond-level order execution.
 
 ## 📋 Table of Contents
