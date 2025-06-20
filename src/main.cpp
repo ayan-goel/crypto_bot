@@ -16,13 +16,14 @@
 // Global flag for graceful shutdown
 std::atomic<bool> running{true};
 std::atomic<int> signal_count{0};
+std::atomic<bool> shutdown_in_progress{false};
 
 void signalHandler(int signum) {
-    signal_count++;
-    if (signal_count == 1) {
-        std::cout << "\nReceived signal " << signum << ". Shutting down gracefully..." << std::endl;
-        std::cout << "Press Ctrl+C again to force quit." << std::endl;
+    if (!shutdown_in_progress.load()) {
         running = false;
+        shutdown_in_progress = true;
+        std::cout << "\nReceived signal " << signum << ". Shutting down gracefully..." << std::endl;
+        std::cout << "(Press Ctrl+C again to force quit if shutdown hangs)" << std::endl;
     } else {
         std::cout << "\nForce quit requested. Exiting immediately..." << std::endl;
         std::exit(1);
@@ -201,7 +202,6 @@ int main(int argc, char* argv[]) {
         }
         
         ws_client.enablePing(config.getWebsocketPingInterval());
-        ws_client.start();
         
         // Start risk monitoring
         risk_manager.startRiskMonitoring();
@@ -257,15 +257,19 @@ int main(int argc, char* argv[]) {
         // Graceful shutdown
         logger.info("Initiating graceful shutdown...");
         auto graceful_shutdown_start = std::chrono::steady_clock::now();
-        
+
         ws_client.stop();
         ws_client.disconnect();
-        
+
         // Check for shutdown timeout
         if (std::chrono::steady_clock::now() - graceful_shutdown_start > shutdown_timeout) {
             std::cout << "Shutdown timeout reached. Force exiting..." << std::endl;
             std::exit(1);
         }
+        
+        // Generate final reports after all trading threads stopped
+        order_manager.shutdown();
+        risk_manager.shutdown();
         
         if (!config.isPaperTrading()) {
             // Cancel all open orders before shutdown
@@ -273,8 +277,6 @@ int main(int argc, char* argv[]) {
             // TODO: Implement order cancellation
         }
         
-        order_manager.shutdown();
-        risk_manager.shutdown();
         rest_client.cleanup();
         
         logger.info("Shutdown complete");

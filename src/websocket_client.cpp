@@ -24,7 +24,17 @@ WebSocketClient::WebSocketClient() {
 }
 
 WebSocketClient::~WebSocketClient() { 
-    stop(); 
+    // Clear static instance pointer to prevent callback access after destruction
+    if (client_instance == this) {
+        client_instance = nullptr;
+    }
+    
+    // Ensure proper shutdown sequence
+    if (running_ || connected_) {
+        stop(); 
+    }
+    
+    // Clean up context after all threads are stopped
     if (context_) {
         lws_context_destroy(context_);
         context_ = nullptr;
@@ -161,15 +171,57 @@ void WebSocketClient::start() {
 }
 
 void WebSocketClient::stop() {
+    std::cout << "Stopping WebSocket client..." << std::endl;
+    
+    // First, signal all threads to stop
     running_ = false;
     connected_ = false;
+    ping_enabled_ = false;
+    // Disable callbacks to prevent further processing
+    message_callback_ = nullptr;
+    connection_callback_ = nullptr;
+    error_callback_ = nullptr;
     
-    if (worker_thread_ && worker_thread_->joinable()) {
-        worker_thread_->join();
+    // Request libwebsockets service loop to exit quickly
+    if (context_) {
+        lws_cancel_service(context_);
     }
-    
+
+    // Close WebSocket connection if still open
+    if (wsi_) {
+        lws_close_reason(wsi_, LWS_CLOSE_STATUS_NORMAL, nullptr, 0);
+        wsi_ = nullptr;
+    }
+
+    // Join ping thread (with timeout)
     if (ping_thread_ && ping_thread_->joinable()) {
-        ping_thread_->join();
+        if (ping_thread_->joinable()) {
+            if (ping_thread_->joinable()) ping_thread_->join();
+        }
+        ping_thread_.reset();
+    }
+
+    // Join worker thread but don't wait forever (max 2 seconds)
+    if (worker_thread_ && worker_thread_->joinable()) {
+        auto join_start = std::chrono::steady_clock::now();
+        while (worker_thread_->joinable()) {
+            auto elapsed = std::chrono::steady_clock::now() - join_start;
+            if (elapsed > std::chrono::seconds(2)) {
+                std::cout << "Worker thread did not exit in time – detaching to avoid hang" << std::endl;
+                worker_thread_->detach();
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+        if (!worker_thread_->joinable()) {
+            worker_thread_.reset();
+        }
+    }
+
+    // Destroy context last
+    if (context_) {
+        lws_context_destroy(context_);
+        context_ = nullptr;
     }
     
     std::cout << "WebSocket client stopped" << std::endl;
@@ -224,9 +276,16 @@ void WebSocketClient::workerLoop() {
         std::cout << "🚀 WebSocket connection initiated..." << std::endl;
         
         // Main service loop
-        while (running_) {
-            lws_service(context_, 50);
+        while (running_.load()) {
+            // Service libwebsockets with short timeout
+            int result = lws_service(context_, 50);
             
+            // Check if service failed or context was destroyed
+            if (result < 0) {
+                std::cout << "lws_service error, terminating worker loop" << std::endl;
+                break;
+            }
+        
             // Send any queued messages
             flushTxQueue();
             
@@ -244,14 +303,18 @@ void WebSocketClient::workerLoop() {
 }
 
 void WebSocketClient::pingLoop() {
+    const std::chrono::milliseconds step(200);
+    std::chrono::milliseconds elapsed{0};
     while (running_ && ping_enabled_) {
-        std::this_thread::sleep_for(std::chrono::seconds(ping_interval_seconds_));
-        
-        if (connected_ && wsi_) {
-            // Send ping frame using libwebsockets
-            unsigned char ping_payload[LWS_PRE + 10];
-            lws_write(wsi_, &ping_payload[LWS_PRE], 0, LWS_WRITE_PING);
+        if (elapsed >= std::chrono::seconds(ping_interval_seconds_)) {
+            if (connected_ && wsi_) {
+                unsigned char ping_payload[LWS_PRE + 10];
+                lws_write(wsi_, &ping_payload[LWS_PRE], 0, LWS_WRITE_PING);
+            }
+            elapsed = std::chrono::milliseconds{0};
         }
+        std::this_thread::sleep_for(step);
+        elapsed += step;
     }
 }
 
@@ -303,14 +366,21 @@ void WebSocketClient::handleMessage(const std::string& message) {
     try {
         nlohmann::json json_msg = nlohmann::json::parse(message);
         
-        if (message_callback_) {
-            message_callback_(json_msg);
+        // DEBUG: Print first 200 chars of message to verify we're getting market data
+        if (message_count_ % 100 == 1) {  // Only print every 100th message to avoid spam
+            std::string preview = message.length() > 200 ? message.substr(0, 200) + "..." : message;
+            std::cout << "📊 WebSocket Message #" << message_count_ << ": " << preview << std::endl;
+        }
+        
+            if (message_callback_) {
+                message_callback_(json_msg);
         }
         
         processMessage(json_msg);
         
     } catch (const std::exception& e) {
         std::cout << "Error parsing JSON message: " << e.what() << std::endl;
+        std::cout << "Raw message: " << message.substr(0, 500) << std::endl;
         error_count_++;
     }
 }
@@ -330,7 +400,9 @@ bool WebSocketClient::attemptReconnect() {
 }
 
 void WebSocketClient::processMessage(const nlohmann::json& json_msg) {
-    // Process the JSON message (implement your business logic here)
+    // This function intentionally does nothing as message processing
+    // is handled by the message callback set in main.cpp
+    // The callback updates the order book and generates trading signals
 }
 
 bool WebSocketClient::validateMessage(const nlohmann::json& json_msg) {
@@ -345,19 +417,19 @@ std::string WebSocketClient::buildOrderBookSubscription(const std::string& symbo
     std::string lowercase_symbol = symbol;
     std::transform(lowercase_symbol.begin(), lowercase_symbol.end(), lowercase_symbol.begin(), ::tolower);
     return lowercase_symbol + "@depth" + std::to_string(depth) + "@" + std::to_string(update_speed_ms) + "ms";
-}
+            }
 
 std::string WebSocketClient::buildTickerSubscription(const std::string& symbol) {
     std::string lowercase_symbol = symbol;
     std::transform(lowercase_symbol.begin(), lowercase_symbol.end(), lowercase_symbol.begin(), ::tolower);
     return lowercase_symbol + "@ticker";
-}
-
+        }
+        
 std::string WebSocketClient::buildTradeSubscription(const std::string& symbol) {
     std::string lowercase_symbol = symbol;
     std::transform(lowercase_symbol.begin(), lowercase_symbol.end(), lowercase_symbol.begin(), ::tolower);
     return lowercase_symbol + "@trade";
-}
+    }
 
 void WebSocketClient::checkHealth() {
     // Health check implementation
@@ -409,7 +481,7 @@ bool WebSocketClient::parseUrl(const std::string& url, std::string& host, std::s
 int WebSocketClient::lwsCallback(struct lws *wsi, enum lws_callback_reasons reason,
                                 void *user, void *in, size_t len) {
     
-    if (!client_instance) return 0;
+    if (!client_instance || !client_instance->running_) return 0;
     
     switch (reason) {
         case LWS_CALLBACK_CLIENT_ESTABLISHED:
@@ -418,8 +490,15 @@ int WebSocketClient::lwsCallback(struct lws *wsi, enum lws_callback_reasons reas
             
         case LWS_CALLBACK_CLIENT_RECEIVE:
             if (in && len > 0) {
-                std::string message(static_cast<char*>(in), len);
-                client_instance->handleMessage(message);
+                // Handle message fragmentation for libwebsockets
+                std::string fragment(static_cast<char*>(in), len);
+                client_instance->rx_buffer_ += fragment;
+    
+                // Check if this is the final frame
+                if (lws_is_final_fragment(wsi)) {
+                    client_instance->handleMessage(client_instance->rx_buffer_);
+                    client_instance->rx_buffer_.clear();
+                }
             }
             break;
             
@@ -428,6 +507,7 @@ int WebSocketClient::lwsCallback(struct lws *wsi, enum lws_callback_reasons reas
             break;
             
         case LWS_CALLBACK_CLOSED:
+            client_instance->wsi_ = nullptr;  // Important: clear the WSI pointer
             client_instance->handleDisconnect();
             break;
             
