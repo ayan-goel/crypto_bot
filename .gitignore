@@ -69,4 +69,4 @@ dump.rdb
 test_results/
 coverage/ 
 
-crypto-bot-key.pem
+crypto-bot.pem
