@@ -21,35 +21,43 @@ bool OrderBook::updateFromWebSocket(const nlohmann::json& depth_data) {
             return false;
         }
         
-        // Process bids
+        // Build fresh maps for this snapshot to avoid stale levels and crossed books
+        std::map<double, double, std::greater<double>> new_bids;
+        std::map<double, double> new_asks;
+        
+        // Process bids array
         if (data["bids"].is_array()) {
-            std::vector<std::vector<std::string>> bids;
             for (const auto& bid : data["bids"]) {
                 if (bid.is_array() && bid.size() >= 2) {
-                    bids.push_back({bid[0].get<std::string>(), bid[1].get<std::string>()});
+                    double price = std::stod(bid[0].get<std::string>());
+                    double quantity = std::stod(bid[1].get<std::string>());
+                    if (quantity > 0.0) {
+                        new_bids[price] = quantity;
+                    }
                 }
             }
-
-            updateBids(bids);
         }
         
-        // Process asks
+        // Process asks array
         if (data["asks"].is_array()) {
-            std::vector<std::vector<std::string>> asks;
             for (const auto& ask : data["asks"]) {
                 if (ask.is_array() && ask.size() >= 2) {
-                    asks.push_back({ask[0].get<std::string>(), ask[1].get<std::string>()});
+                    double price = std::stod(ask[0].get<std::string>());
+                    double quantity = std::stod(ask[1].get<std::string>());
+                    if (quantity > 0.0) {
+                        new_asks[price] = quantity;
+                    }
                 }
             }
-
-            updateAsks(asks);
         }
+        
+        // Replace existing maps with the fresh snapshot
+        bids_.swap(new_bids);
+        asks_.swap(new_asks);
         
         last_update_time_ = std::chrono::system_clock::now();
         update_count_++;
         invalidateCache();
-        
-        // Market data successfully processed - silent operation in production
         
         return true;
         
