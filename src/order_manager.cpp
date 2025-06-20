@@ -226,8 +226,8 @@ OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::s
     // Track the order
     trackOrder(order);
     
-    // Save to Redis
-    saveOrderToRedis(order);
+    // Skip Redis for paper trading performance
+    // saveOrderToRedis(order);
     
     // Simulate immediate fill for paper trading (in real trading, this would come from exchange)
     auto fill_start_time = std::chrono::high_resolution_clock::now();
@@ -259,10 +259,10 @@ OrderResponse OrderManager::executeOrder(const std::string& symbol, const std::s
     response.filled_quantity = quantity;
     response.avg_fill_price = price;
     
-    std::cout << "🔥 ORDER EXECUTED: " << side << " " << quantity << " " << symbol 
-              << " @ $" << price << " [ID: " << client_order_id << "] "
-              << "(Order: " << std::fixed << std::setprecision(2) << order_latency_ms << "ms, "
-              << "Fill: " << fill_latency_ms << "ms)" << std::endl;
+    // Minimal console output for HFT performance
+    if (orders_filled_ % 100 == 0) {
+        std::cout << "🔥 " << orders_filled_ << " trades executed" << std::endl;
+    }
     
     return response;
 }
@@ -316,36 +316,11 @@ void OrderManager::simulateOrderFill(Order& order) {
     // Update the tracked order
     updateTrackedOrder(order);
     
-    std::cout << "✅ TRADE FILLED: " << order.side << " " << order.filled_quantity 
-              << " " << order.symbol << " @ $" << order.price 
-              << " [ID: " << order.order_id << "]" << std::endl;
+    // Skip individual trade console output for performance
 }
 
 void OrderManager::logTrade(const Order& order) {
-    // Get current time for trade logging
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-    
-    std::ostringstream timestamp;
-    timestamp << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-    timestamp << '.' << std::setfill('0') << std::setw(3) << ms.count();
-    
-    // Calculate trade value
-    double trade_value = order.filled_quantity * order.price;
-    
-    // Log to trades.log
-    std::ofstream trades_file("logs/trades.log", std::ios::app);
-    if (trades_file.is_open()) {
-        trades_file << timestamp.str() << " " << order.symbol << " " << order.side 
-                   << " " << std::fixed << std::setprecision(8) << order.filled_quantity
-                   << " @ $" << std::fixed << std::setprecision(2) << order.price
-                   << " Value: $" << std::fixed << std::setprecision(2) << trade_value
-                   << " [ID: " << order.order_id << "]" << std::endl;
-        trades_file.close();
-    }
-    
-    // Update position and calculate PnL
+    // Skip file I/O for paper trading performance - just update PnL
     updatePositionAndPnL(order);
 }
 
