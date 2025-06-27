@@ -69,4 +69,6 @@ dump.rdb
 test_results/
 coverage/ 
 
+# Config files
+config.txt
 crypto-bot.pem

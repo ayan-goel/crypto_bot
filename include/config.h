@@ -11,11 +11,23 @@ public:
     // Load configuration from file
     bool loadFromFile(const std::string& filename = "config.txt");
     
-    // Getters for configuration values
-    std::string getBinanceApiKey() const;
-    std::string getBinanceSecretKey() const;
-    std::string getBinanceBaseUrl() const;
-    std::string getBinanceWsUrl() const;
+    // Exchange API credentials (for market data)
+    std::string getExchangeApiKey() const;
+    std::string getExchangeSecretKey() const;
+    std::string getExchangePassphrase() const;
+    std::string getExchangeWsUrl() const;
+    
+    // Advanced Trade API credentials (for order execution)
+    std::string getAdvancedTradeApiKey() const;
+    std::string getAdvancedTradeSecretKey() const;
+    std::string getAdvancedTradeWsUrl() const;
+    
+    // Legacy getters for configuration values
+    std::string getCoinbaseApiKey() const;
+    std::string getCoinbaseSecretKey() const;
+    std::string getCoinbasePassphrase() const;
+    std::string getCoinbaseBaseUrl() const;
+    std::string getCoinbaseWsUrl() const;
     std::string getTradingSymbol() const;
     std::string getBaseAsset() const;
     std::string getQuoteAsset() const;
@@ -71,6 +83,7 @@ private:
     double getDouble(const std::string& key, double default_val = 0.0) const;
     int getInt(const std::string& key, int default_val = 0) const;
     bool getBool(const std::string& key, bool default_val = false) const;
+
     
     void trim(std::string& str);
 }; 

@@ -9,51 +9,70 @@ bool OrderBook::updateFromWebSocket(const nlohmann::json& depth_data) {
     std::lock_guard<std::mutex> lock(mutex_);
     
     try {
-        // Check if this is a Binance depth stream message
-        if (!depth_data.contains("stream") || !depth_data.contains("data")) {
+        // Handle Coinbase Advanced Trade Level 2 channel format
+        if (!depth_data.contains("type") || !depth_data.contains("product_id")) {
             return false;
         }
         
-        const auto& data = depth_data["data"];
+        std::string type = depth_data["type"];
+        std::string product_id = depth_data["product_id"];
         
-        // Verify it's a depth update
-        if (!data.contains("bids") || !data.contains("asks")) {
+        // Verify this message is for our symbol
+        if (product_id != symbol_) {
             return false;
         }
         
-        // Build fresh maps for this snapshot to avoid stale levels and crossed books
-        std::map<double, double, std::greater<double>> new_bids;
-        std::map<double, double> new_asks;
-        
-        // Process bids array
-        if (data["bids"].is_array()) {
-            for (const auto& bid : data["bids"]) {
-                if (bid.is_array() && bid.size() >= 2) {
-                    double price = std::stod(bid[0].get<std::string>());
-                    double quantity = std::stod(bid[1].get<std::string>());
-                    if (quantity > 0.0) {
-                        new_bids[price] = quantity;
+        if (type == "snapshot") {
+            // Full snapshot - rebuild the entire order book
+            bids_.clear();
+            asks_.clear();
+            
+            if (depth_data.contains("updates") && depth_data["updates"].is_array()) {
+                for (const auto& update : depth_data["updates"]) {
+                    if (update.contains("price_level") && update.contains("new_quantity") && update.contains("side")) {
+                        double price = std::stod(update["price_level"].get<std::string>());
+                        double quantity = std::stod(update["new_quantity"].get<std::string>());
+                        std::string side = update["side"];
+                        
+                        if (quantity > 0.0) {
+                            if (side == "bid") {
+                                bids_[price] = quantity;
+                            } else if (side == "offer") {
+                                asks_[price] = quantity;
+                            }
+                        }
                     }
                 }
             }
-        }
-        
-        // Process asks array
-        if (data["asks"].is_array()) {
-            for (const auto& ask : data["asks"]) {
-                if (ask.is_array() && ask.size() >= 2) {
-                    double price = std::stod(ask[0].get<std::string>());
-                    double quantity = std::stod(ask[1].get<std::string>());
-                    if (quantity > 0.0) {
-                        new_asks[price] = quantity;
+        } else if (type == "update") {
+            // Incremental updates
+            if (depth_data.contains("updates") && depth_data["updates"].is_array()) {
+                for (const auto& update : depth_data["updates"]) {
+                    if (update.contains("price_level") && update.contains("new_quantity") && update.contains("side")) {
+                        double price = std::stod(update["price_level"].get<std::string>());
+                        double quantity = std::stod(update["new_quantity"].get<std::string>());
+                        std::string side = update["side"];
+                        
+                        if (side == "bid") {
+                            if (quantity == 0.0) {
+                                bids_.erase(price);
+                            } else {
+                                bids_[price] = quantity;
+                            }
+                        } else if (side == "offer") {
+                            if (quantity == 0.0) {
+                                asks_.erase(price);
+                            } else {
+                                asks_[price] = quantity;
+                            }
+                        }
                     }
                 }
             }
+        } else {
+            // Unknown message type
+            return false;
         }
-        
-        // Replace existing maps with the fresh snapshot
-        bids_.swap(new_bids);
-        asks_.swap(new_asks);
         
         last_update_time_ = std::chrono::system_clock::now();
         update_count_++;
@@ -62,7 +81,7 @@ bool OrderBook::updateFromWebSocket(const nlohmann::json& depth_data) {
         return true;
         
     } catch (const std::exception& e) {
-        std::cout << "Error processing WebSocket depth data: " << e.what() << std::endl;
+        std::cout << "Error processing Coinbase Level 2 data: " << e.what() << std::endl;
         return false;
     }
 }

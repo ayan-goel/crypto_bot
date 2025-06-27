@@ -103,13 +103,23 @@ int main(int argc, char* argv[]) {
             return 1;
         }
         
-        rest_client.setApiCredentials(config.getBinanceApiKey(), config.getBinanceSecretKey());
-        rest_client.setBaseUrl(config.getBinanceBaseUrl());
+            rest_client.setApiCredentials(config.getCoinbaseApiKey(), config.getCoinbaseSecretKey());
+    rest_client.setBaseUrl(config.getCoinbaseBaseUrl());
+    
+    // Set WebSocket API credentials for JWT authentication (Advanced Trade API)
+    std::string api_key = config.getCoinbaseApiKey();
+    std::string secret_key = config.getCoinbaseSecretKey();
+    
+    std::cout << "🔐 Setting WebSocket credentials (Advanced Trade API):" << std::endl;
+    std::cout << "   API Key: " << (api_key.empty() ? "EMPTY" : api_key.substr(0, 8) + "...") << std::endl;
+    std::cout << "   Secret Key: " << (secret_key.empty() ? "EMPTY" : "SET (" + std::to_string(secret_key.length()) + " chars)") << std::endl;
+    
+    ws_client.setApiCredentials(api_key, secret_key);
         
         // Test API connectivity
         auto ping_response = rest_client.ping();
         if (!ping_response.success) {
-            logger.error("Failed to ping Binance API: " + ping_response.error_message);
+            logger.error("Failed to ping Coinbase API: " + ping_response.error_message);
             return 1;
         }
         
@@ -119,7 +129,7 @@ int main(int argc, char* argv[]) {
         order_manager.startLatencyMonitoring();
         
         // Perform initial network latency test
-        std::cout << "🔄 Testing network latency to Binance..." << std::endl;
+        std::cout << "🔄 Testing network latency to Coinbase..." << std::endl;
         double network_latency = order_manager.measureNetworkLatency();
         if (network_latency > 0) {
             std::cout << "✅ Initial latency test complete" << std::endl;
@@ -211,7 +221,7 @@ int main(int argc, char* argv[]) {
         });
         
         // Connect to WebSocket
-        if (!ws_client.connect(config.getBinanceWsUrl())) {
+        if (!ws_client.connect(config.getCoinbaseWsUrl())) {
             logger.error("Failed to connect to WebSocket");
             return 1;
         }

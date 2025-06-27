@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <nlohmann/json.hpp>
 
 Config& Config::getInstance() {
     static Config instance;
@@ -38,24 +39,60 @@ bool Config::loadFromFile(const std::string& filename) {
 }
 
 // Getters for configuration values
-std::string Config::getBinanceApiKey() const {
-    return getString("BINANCE_API_KEY");
+// Exchange API credentials (for market data)
+std::string Config::getExchangeApiKey() const {
+    return getString("EXCHANGE_API_KEY");
 }
 
-std::string Config::getBinanceSecretKey() const {
-    return getString("BINANCE_SECRET_KEY");
+std::string Config::getExchangeSecretKey() const {
+    return getString("EXCHANGE_SECRET_KEY");
 }
 
-std::string Config::getBinanceBaseUrl() const {
-    return getString("BINANCE_BASE_URL", "https://testnet.binance.vision");
+std::string Config::getExchangePassphrase() const {
+    return getString("EXCHANGE_PASSPHRASE");
 }
 
-std::string Config::getBinanceWsUrl() const {
-    return getString("BINANCE_WS_URL", "wss://testnet.binance.vision/ws");
+std::string Config::getExchangeWsUrl() const {
+    return getString("EXCHANGE_WS_URL", "wss://ws-feed.exchange.coinbase.com");
+}
+
+// Advanced Trade API credentials (for order execution)
+std::string Config::getAdvancedTradeApiKey() const {
+    return getString("ADVANCED_TRADE_API_KEY");
+}
+
+std::string Config::getAdvancedTradeSecretKey() const {
+    return getString("ADVANCED_TRADE_SECRET_KEY");
+}
+
+std::string Config::getAdvancedTradeWsUrl() const {
+    return getString("ADVANCED_TRADE_WS_URL", "wss://advanced-trade-ws.coinbase.com");
+}
+
+// Legacy getters (for backwards compatibility)
+std::string Config::getCoinbaseApiKey() const {
+    return getString("COINBASE_API_KEY");
+}
+
+std::string Config::getCoinbaseSecretKey() const {
+    return getString("COINBASE_SECRET_KEY");
+}
+
+std::string Config::getCoinbasePassphrase() const {
+    return getString("COINBASE_PASSPHRASE");
+}
+
+std::string Config::getCoinbaseBaseUrl() const {
+    return getString("COINBASE_BASE_URL", "https://api.coinbase.com/api/v3/brokerage");
+}
+
+std::string Config::getCoinbaseWsUrl() const {
+    // Try Exchange API WebSocket endpoint first
+    return getString("COINBASE_WS_URL", "wss://ws-feed.exchange.coinbase.com");
 }
 
 std::string Config::getTradingSymbol() const {
-    return getString("TRADING_SYMBOL", "ETHUSDT");
+    return getString("TRADING_SYMBOL", "ETH-USD");
 }
 
 std::string Config::getBaseAsset() const {
@@ -63,7 +100,7 @@ std::string Config::getBaseAsset() const {
 }
 
 std::string Config::getQuoteAsset() const {
-    return getString("QUOTE_ASSET", "USDT");
+    return getString("QUOTE_ASSET", "USD");
 }
 
 // Strategy parameters
@@ -153,7 +190,7 @@ int Config::getMaxReconnectAttempts() const {
 
 // Development settings
 bool Config::isTestnet() const {
-    return getBool("USE_TESTNET", true);
+    return getBool("USE_SANDBOX", true);
 }
 
 bool Config::isPaperTrading() const {

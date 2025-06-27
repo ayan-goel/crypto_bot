@@ -1,0 +1,67 @@
+# Trading Configuration for HFT Crypto Bot
+# Capital and Position Management
+INITIAL_CAPITAL=50.0
+ORDER_SIZE=0.001
+MAX_INVENTORY=0.015
+POSITION_LIMIT_ETHUSDT=0.02
+
+# Market Making Strategy
+SPREAD_THRESHOLD_BPS=1.0
+ORDER_REFRESH_INTERVAL_MS=50
+ORDER_RATE_LIMIT=300
+
+# Risk Management - TIGHTER CONTROLS
+MAX_DAILY_LOSS_LIMIT=3.0
+MAX_DRAWDOWN_LIMIT=2.0
+CIRCUIT_BREAKER_LOSS=2.5
+
+# WebSocket and API - Using Advanced Trade API (Ed25519)
+WEBSOCKET_UPDATE_INTERVAL_MS=100
+API_BASE_URL=https://api.coinbase.com/api/v3/brokerage
+
+# Logging
+LOG_LEVEL=INFO
+LOG_TO_FILE=true
+LOG_FILENAME=logs/hft_session.log
+
+# Coinbase Advanced Trade API Configuration (ECDSA keys for both market data and trading)
+COINBASE_API_KEY=organizations/6d9c94a8-a4cb-4cfa-bc94-2c5aefeb29e7/apiKeys/5b3bae4f-b11b-450f-b96d-a4eee9b62a0d
+COINBASE_SECRET_KEY=-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKhgOr0A/OMx7hmrRktz3I7hqckxo5AHmpEuE4uNqhx7oAoGCCqGSM49\nAwEHoUQDQgAEhZ+Z5QZ+oqb1sgc5druiKWW2ant0+yVi299CjG6e94hyW/OgQsRH\nAy+9l4/QpWk8nAbBKatARR/MzMzu+Wni/A==\n-----END EC PRIVATE KEY-----\n
+COINBASE_BASE_URL=https://api.coinbase.com/api/v3/brokerage
+COINBASE_WS_URL=wss://advanced-trade-ws.coinbase.com
+
+# Trading Environment
+USE_SANDBOX=false
+
+# Trading Pair Configuration
+TRADING_SYMBOL=ETH-USD
+BASE_ASSET=ETH
+QUOTE_ASSET=USD
+
+# Strategy Parameters - Optimized for better rebalancing
+ORDER_TIMEOUT_SECONDS=1
+
+# Risk Management - Balanced for $50 capital with better position management
+ENABLE_CIRCUIT_BREAKER=true
+RISK_MONITORING=true
+
+# Capital Management
+CAPITAL_ALLOCATION_PERCENT=100.0
+
+# System Configuration
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_DB=0
+
+# Logging Configuration
+LOG_TO_CONSOLE=true
+
+# Performance Settings - HFT optimized
+ORDERBOOK_DEPTH=20
+WEBSOCKET_PING_INTERVAL=10
+REST_TIMEOUT_SECONDS=2
+MAX_RECONNECT_ATTEMPTS=3
+
+# Development Settings
+PAPER_TRADING=true
+ENABLE_DEBUGGING=false 
