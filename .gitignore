@@ -71,4 +71,4 @@ coverage/
 
 # Config files
 config.txt
-crypto-bot.pem
+coinbase-bot.pem
