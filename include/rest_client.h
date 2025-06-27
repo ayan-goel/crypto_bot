@@ -16,10 +16,9 @@ struct RestResponse {
     double response_time_ms = 0.0;
 };
 
-struct BinanceApiLimits {
-    int request_weight = 0;
-    int order_count_10s = 0;
-    int order_count_1d = 0;
+struct CoinbaseApiLimits {
+    int requests_per_second = 0;
+    int burst_limit = 0;
     std::chrono::system_clock::time_point last_update;
 };
 
@@ -33,7 +32,7 @@ public:
     void cleanup();
     
     // Authentication setup
-    void setApiCredentials(const std::string& api_key, const std::string& secret_key);
+    void setApiCredentials(const std::string& api_key, const std::string& secret_key, const std::string& passphrase = "");
     void setBaseUrl(const std::string& base_url);
     
     // Market Data (Public endpoints)
@@ -69,7 +68,7 @@ public:
     RestResponse cancelAllOpenOrders(const std::string& symbol);
     
     // Rate limiting
-    BinanceApiLimits getApiLimits() const;
+    CoinbaseApiLimits getApiLimits() const;
     bool isRateLimited() const;
     void updateRateLimits(const std::map<std::string, std::string>& headers);
     
@@ -86,10 +85,11 @@ private:
     // Authentication
     std::string api_key_;
     std::string secret_key_;
+    std::string passphrase_;
     std::string base_url_;
     
     // Rate limiting
-    BinanceApiLimits api_limits_;
+    CoinbaseApiLimits api_limits_;
     mutable std::mutex rate_limit_mutex_;
     
     // Statistics
@@ -118,13 +118,19 @@ private:
                      const std::map<std::string, std::string>& params = {},
                      bool requires_signature = false);
     
+    RestResponse postJson(const std::string& endpoint,
+                         const std::string& json_body,
+                         bool requires_signature = false);
+    
     RestResponse delete_request(const std::string& endpoint,
                                const std::map<std::string, std::string>& params = {},
                                bool requires_signature = false);
     
     // Authentication helpers
+    std::string createJwtToken(const std::string& method, const std::string& request_path, const std::string& body = "") const;
     std::string createSignature(const std::string& query_string) const;
     std::string hmacSha256(const std::string& key, const std::string& data) const;
+    std::string base64Decode(const std::string& input) const;
     std::string buildQueryString(const std::map<std::string, std::string>& params) const;
     uint64_t getCurrentTimestamp() const;
     
@@ -148,4 +154,6 @@ private:
     // Validation
     bool validateApiCredentials() const;
     bool validateParameters(const std::map<std::string, std::string>& params) const;
+    
+    std::string hexEncode(const std::string& input) const;
 }; 

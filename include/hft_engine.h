@@ -111,6 +111,7 @@ struct HFTMetrics {
     uint64_t avg_order_latency_ns{0};
     uint64_t min_order_latency_ns{UINT64_MAX};
     uint64_t max_order_latency_ns{0};
+    uint64_t websocket_latency_ns{0};
     
     // Trading rate
     uint64_t orders_per_second{0};
@@ -130,6 +131,7 @@ struct AtomicHFTMetrics {
     std::atomic<uint64_t> avg_order_latency_ns{0};
     std::atomic<uint64_t> min_order_latency_ns{UINT64_MAX};
     std::atomic<uint64_t> max_order_latency_ns{0};
+    std::atomic<uint64_t> websocket_latency_ns{0};
     
     // Trading rate
     std::atomic<uint64_t> orders_per_second{0};

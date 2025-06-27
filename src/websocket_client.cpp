@@ -1,9 +1,23 @@
 #include "websocket_client.h"
+#include "config.h"
 #include <iostream>
 #include <sstream>
 #include <thread>
 #include <algorithm>
 #include <libwebsockets.h>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
+#include <openssl/ec.h>
+#include <openssl/ecdsa.h>
+#include <openssl/pem.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <openssl/bn.h>
+#include <iomanip>
+#include <chrono>
+#include <vector>
+#include <algorithm>
+#include <jwt-cpp/jwt.h>
 
 // Static pointer to access WebSocketClient instance from C callback
 static WebSocketClient* client_instance = nullptr;
@@ -14,7 +28,7 @@ WebSocketClient::WebSocketClient() {
     
     // Initialize protocols
     protocols_[0] = {
-        "binance-protocol",
+        "coinbase-protocol",
         lwsCallback,
         0,
         4096,
@@ -39,6 +53,13 @@ WebSocketClient::~WebSocketClient() {
         lws_context_destroy(context_);
         context_ = nullptr;
     }
+}
+
+void WebSocketClient::setApiCredentials(const std::string& api_key, const std::string& secret_key, const std::string& passphrase) {
+    api_key_ = api_key;
+    secret_key_ = secret_key;
+    // Note: passphrase not needed for Advanced Trade API, but kept for compatibility
+    passphrase_ = passphrase;
 }
 
 bool WebSocketClient::connect(const std::string& url) {
@@ -95,24 +116,33 @@ void WebSocketClient::setErrorCallback(ErrorCallback callback) {
 }
 
 bool WebSocketClient::subscribeOrderBook(const std::string& symbol, int depth, int update_speed_ms) {
-    std::string stream = buildOrderBookSubscription(symbol, depth, update_speed_ms);
+    // Use Advanced Trade API with JWT/EdDSA authentication for Level 2 data
+    if (api_key_.empty() || secret_key_.empty()) {
+        std::cout << "❌ ERROR: Advanced Trade API credentials required for Level 2 data" << std::endl;
+        return false;
+    }
     
-    // Create subscription message for Binance WebSocket API
-    nlohmann::json sub_msg = {
-        {"method", "SUBSCRIBE"},
-        {"params", {stream}},
-        {"id", 1}
+    // API credentials validated
+    
+    // Generate JWT token for Advanced Trade API WebSocket authentication
+    std::string jwt_token = createJwtToken("", "", "");
+    
+    // Create subscription message with JWT authentication for Advanced Trade API
+    nlohmann::json subscription = {
+        {"type", "subscribe"},
+        {"product_ids", {symbol}},
+        {"channel", "level2"},
+        {"jwt", jwt_token}
     };
     
-    std::string subscription = sub_msg.dump();
+    std::string sub_msg = subscription.dump();
+    
+    // JWT token generated
     
     if (connected_ && wsi_) {
-        sendMessage(subscription);
-        std::cout << "Sent subscription: " << subscription << std::endl;
+        sendMessage(sub_msg);
     } else {
-        // Store subscription for when connection is established
-        pending_subscriptions_.push_back(subscription);
-        std::cout << "Stored pending subscription for " << symbol << " orderbook" << std::endl;
+        pending_subscriptions_.push_back(sub_msg);
     }
     
     return true;
@@ -250,7 +280,7 @@ void WebSocketClient::workerLoop() {
             return;
         }
         
-        std::cout << "✅ Created libwebsockets context" << std::endl;
+        // libwebsockets context created
         
         // Prepare connection info
         struct lws_client_connect_info ccinfo = {0};
@@ -263,7 +293,7 @@ void WebSocketClient::workerLoop() {
         ccinfo.protocol = protocols_[0].name;
         ccinfo.ssl_connection = (port_ == 443) ? LCCSCF_USE_SSL : 0;
         
-        std::cout << "🔗 Connecting to " << host_ << ":" << port_ << path_ << std::endl;
+        // Connecting to WebSocket
         
         // Connect
         wsi_ = lws_client_connect_via_info(&ccinfo);
@@ -273,7 +303,7 @@ void WebSocketClient::workerLoop() {
             return;
         }
         
-        std::cout << "🚀 WebSocket connection initiated..." << std::endl;
+        // WebSocket connection initiated
         
         // Main service loop
         while (running_.load()) {
@@ -366,14 +396,30 @@ void WebSocketClient::handleMessage(const std::string& message) {
     try {
         nlohmann::json json_msg = nlohmann::json::parse(message);
         
-        // DEBUG: Print first 200 chars of message to verify we're getting market data
-        if (message_count_ % 100 == 1) {  // Only print every 100th message to avoid spam
-            std::string preview = message.length() > 200 ? message.substr(0, 200) + "..." : message;
-            std::cout << "📊 WebSocket Message #" << message_count_ << ": " << preview << std::endl;
+        // Enhanced error logging - show full error details
+        if (message.find("error") != std::string::npos) {
+            std::cout << "❌ ERROR MESSAGE RECEIVED:" << std::endl;
+            std::cout << "   Raw: " << message << std::endl;
+            
+            // Try to extract additional error details
+            if (json_msg.contains("message")) {
+                std::cout << "   Error message: " << json_msg["message"] << std::endl;
+            }
+            if (json_msg.contains("error")) {
+                std::cout << "   Error field: " << json_msg["error"] << std::endl;
+            }
+            if (json_msg.contains("code")) {
+                std::cout << "   Error code: " << json_msg["code"] << std::endl;
+            }
+            if (json_msg.contains("details")) {
+                std::cout << "   Error details: " << json_msg["details"] << std::endl;
+            }
         }
         
-            if (message_callback_) {
-                message_callback_(json_msg);
+        // Message processing (silent)
+        
+        if (message_callback_) {
+            message_callback_(json_msg);
         }
         
         processMessage(json_msg);
@@ -526,6 +572,8 @@ void WebSocketClient::sendMessage(const std::string& message) {
     std::lock_guard<std::mutex> lock(tx_mutex_);
     tx_queue_.push_back(message);
     
+    // Outgoing message queued
+    
     if (wsi_) {
         lws_callback_on_writable(wsi_);
     }
@@ -553,3 +601,131 @@ void WebSocketClient::flushTxQueue() {
         tx_queue_.erase(tx_queue_.begin());
     }
 } 
+
+// JWT Authentication Implementation for Coinbase using jwt-cpp
+std::string WebSocketClient::createJwtToken(const std::string& method, const std::string& request_path, const std::string& body) const {
+    try {
+        // Parse the private key and replace \\n with actual newlines
+        std::string private_key = secret_key_;
+        size_t pos = 0;
+        while ((pos = private_key.find("\\n", pos)) != std::string::npos) {
+            private_key.replace(pos, 2, "\n");
+            pos += 1;
+        }
+        
+        // Generate random nonce (16 bytes as raw binary)
+        unsigned char nonce_raw[16];
+        RAND_bytes(nonce_raw, sizeof(nonce_raw));
+        std::string nonce(reinterpret_cast<char*>(nonce_raw), sizeof(nonce_raw));
+        
+        // For WebSocket, use the same host as REST API for JWT validation
+        std::string uri = "GET api.coinbase.com";
+        
+        // Create JWT token exactly like Coinbase example
+        auto token = jwt::create()
+            .set_subject(api_key_)
+            .set_issuer("cdp")
+            .set_not_before(std::chrono::system_clock::now())
+            .set_expires_at(std::chrono::system_clock::now() + std::chrono::seconds{120})
+            .set_payload_claim("uri", jwt::claim(uri))
+            .set_header_claim("kid", jwt::claim(api_key_))
+            .set_header_claim("nonce", jwt::claim(nonce))
+            .sign(jwt::algorithm::es256("", private_key));
+        
+        return token;
+        
+    } catch (const std::exception& e) {
+        std::cerr << "❌ WebSocket JWT token creation failed: " << e.what() << std::endl;
+        return "";
+    }
+}
+
+// Manual base64UrlEncode removed - jwt-cpp handles this
+
+// Manual signing methods removed - now using jwt-cpp library
+
+std::string WebSocketClient::createHMACSignature(const std::string& message, const std::string& secret) const {
+    std::cout << "🔐 Creating HMAC-SHA256 signature:" << std::endl;
+    std::cout << "   Message: " << message << std::endl;
+    std::cout << "   Secret length: " << secret.length() << " chars" << std::endl;
+    
+    // For Exchange API, decode the base64 secret key
+    std::string decoded_secret;
+    std::cout << "   Processing Exchange API secret key for HMAC..." << std::endl;
+    std::cout << "   Secret key length: " << secret.length() << " chars" << std::endl;
+    std::cout << "   Secret key sample: " << secret.substr(0, 50) << "..." << std::endl;
+    
+    // Try to base64 decode the secret
+    decoded_secret = base64Decode(secret);
+    if (decoded_secret.length() > 0) {
+        std::cout << "   Successfully decoded to " << decoded_secret.length() << " bytes for HMAC" << std::endl;
+    } else {
+        // Fallback: use the secret as-is
+        std::cout << "   Decode failed, using secret as-is..." << std::endl;
+        decoded_secret = secret;
+    }
+    
+    // Create HMAC-SHA256 signature
+    unsigned char* digest;
+    unsigned int digest_len;
+    
+    digest = HMAC(EVP_sha256(), 
+                  decoded_secret.c_str(), decoded_secret.length(),
+                  reinterpret_cast<const unsigned char*>(message.c_str()), message.length(),
+                  nullptr, &digest_len);
+    
+    if (!digest) {
+        std::cout << "❌ Failed to create HMAC signature" << std::endl;
+        return "";
+    }
+    
+    // Convert to base64
+    BIO *bio, *b64;
+    BUF_MEM *bufferPtr;
+    
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_new(BIO_s_mem());
+    bio = BIO_push(b64, bio);
+    
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+    BIO_write(bio, digest, digest_len);
+    BIO_flush(bio);
+    BIO_get_mem_ptr(bio, &bufferPtr);
+    
+    std::string result(bufferPtr->data, bufferPtr->length);
+    BIO_free_all(bio);
+    
+    std::cout << "✅ HMAC signature created (length: " << result.length() << " chars)" << std::endl;
+    return result;
+}
+
+std::string WebSocketClient::base64Decode(const std::string& input) const {
+    BIO *bio, *b64;
+    std::vector<char> buffer(input.length());
+    
+    bio = BIO_new_mem_buf(input.c_str(), input.length());
+    b64 = BIO_new(BIO_f_base64());
+    bio = BIO_push(b64, bio);
+    
+    BIO_set_flags(bio, BIO_FLAGS_BASE64_NO_NL);
+    int decode_len = BIO_read(bio, buffer.data(), buffer.size());
+    BIO_free_all(bio);
+    
+    if (decode_len <= 0) {
+        std::cout << "   Base64 decode failed, decode_len = " << decode_len << std::endl;
+        std::cout << "   Input length: " << input.length() << std::endl;
+        std::cout << "   Input sample: " << input.substr(0, 50) << "..." << std::endl;
+        return "";
+    }
+    
+    std::cout << "   Base64 decode successful, decoded " << decode_len << " bytes" << std::endl;
+    return std::string(buffer.data(), decode_len);
+}
+
+std::string WebSocketClient::hexEncode(const std::string& input) const {
+    std::stringstream ss;
+    for (char c : input) {
+        ss << std::hex << std::setfill('0') << std::setw(2) << (int)(unsigned char)c;
+    }
+    return ss.str();
+}

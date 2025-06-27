@@ -20,6 +20,9 @@ public:
     WebSocketClient();
     ~WebSocketClient();
     
+    // Authentication setup for Coinbase Advanced Trade API
+    void setApiCredentials(const std::string& api_key, const std::string& secret_key, const std::string& passphrase = "");
+    
     // Connection management
     bool connect(const std::string& url);
     void disconnect();
@@ -53,6 +56,11 @@ public:
     void stop();
 
 private:
+    // Authentication credentials
+    std::string api_key_;
+    std::string secret_key_;
+    std::string passphrase_;
+    
     // Connection state
     std::atomic<bool> connected_{false};
     std::atomic<bool> running_{false};
@@ -140,4 +148,10 @@ private:
     // Send message via libwebsockets
     void sendMessage(const std::string& message);
     void flushTxQueue();
+    
+    // JWT authentication for Coinbase
+    std::string createJwtToken(const std::string& method, const std::string& request_path, const std::string& body = "") const;
+    std::string createHMACSignature(const std::string& message, const std::string& secret) const;
+    std::string base64Decode(const std::string& input) const;
+    std::string hexEncode(const std::string& input) const;
 }; 

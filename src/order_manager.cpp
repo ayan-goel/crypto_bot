@@ -600,11 +600,11 @@ double OrderManager::measureNetworkLatency() {
     for (int i = 0; i < ping_count; i++) {
         auto start_time = std::chrono::high_resolution_clock::now();
         
-        // Simple HTTPS GET request to Binance timestamp endpoint
-        // This measures network round-trip time to Binance
+        // Simple HTTPS GET request to Coinbase time endpoint
+        // This measures network round-trip time to Coinbase
         CURL* curl = curl_easy_init();
         if (curl) {
-            curl_easy_setopt(curl, CURLOPT_URL, "https://api.binance.com/api/v3/time");
+            curl_easy_setopt(curl, CURLOPT_URL, "https://api.coinbase.com/api/v3/brokerage/time");
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, nullptr);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
@@ -634,7 +634,7 @@ double OrderManager::measureNetworkLatency() {
     
     if (avg_latency > 0) {
         updateNetworkLatencyMetrics(avg_latency);
-        std::cout << "🌐 Network latency to Binance: " << std::fixed << std::setprecision(2) 
+        std::cout << "🌐 Network latency to Coinbase: " << std::fixed << std::setprecision(2) 
                   << avg_latency << "ms (avg of " << successful_pings << " pings)" << std::endl;
     } else {
         std::cout << "❌ Failed to measure network latency" << std::endl;

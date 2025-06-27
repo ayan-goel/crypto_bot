@@ -14,8 +14,12 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
 endif()
 
+# Add jwt-cpp subdirectory
+add_subdirectory(jwt-cpp)
+
 # Include directories
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${CMAKE_SOURCE_DIR}/jwt-cpp/include)
 
 # macOS specific paths for Homebrew
 if(APPLE)
@@ -77,6 +81,7 @@ target_link_libraries(${PROJECT_NAME}
     OpenSSL::Crypto
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    jwt-cpp::jwt-cpp
     ${HIREDIS_LIBRARIES}
     ${LIBWEBSOCKETS_LIBRARIES}
     z  # zlib for compression
@@ -88,6 +93,7 @@ target_link_libraries(crypto_hft_engine
     OpenSSL::Crypto
     CURL::libcurl
     nlohmann_json::nlohmann_json
+    jwt-cpp::jwt-cpp
     ${HIREDIS_LIBRARIES}
     ${LIBWEBSOCKETS_LIBRARIES}
     z  # zlib for compression
