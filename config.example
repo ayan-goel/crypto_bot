@@ -25,8 +25,8 @@ LOG_TO_FILE=true
 LOG_FILENAME=logs/hft_session.log
 
 # Coinbase Advanced Trade API Configuration (ECDSA keys for both market data and trading)
-COINBASE_API_KEY=organizations/6d9c94a8-a4cb-4cfa-bc94-2c5aefeb29e7/apiKeys/5b3bae4f-b11b-450f-b96d-a4eee9b62a0d
-COINBASE_SECRET_KEY=-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIKhgOr0A/OMx7hmrRktz3I7hqckxo5AHmpEuE4uNqhx7oAoGCCqGSM49\nAwEHoUQDQgAEhZ+Z5QZ+oqb1sgc5druiKWW2ant0+yVi299CjG6e94hyW/OgQsRH\nAy+9l4/QpWk8nAbBKatARR/MzMzu+Wni/A==\n-----END EC PRIVATE KEY-----\n
+COINBASE_API_KEY=
+COINBASE_SECRET_KEY=
 COINBASE_BASE_URL=https://api.coinbase.com/api/v3/brokerage
 COINBASE_WS_URL=wss://advanced-trade-ws.coinbase.com
 
