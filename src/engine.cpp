@@ -10,7 +10,6 @@
 #include "risk/risk_manager.h"
 #include "metrics/metrics.h"
 #include <iostream>
-#include <iomanip>
 #include <cmath>
 
 HFTEngine::HFTEngine() = default;
@@ -40,7 +39,6 @@ bool HFTEngine::initialize(const std::string& config_file) {
         logger_->error("Failed to initialize order manager");
         return false;
     }
-    order_manager_->setRiskManager(risk_manager_.get());
 
     websocket_client_ = std::make_unique<WebSocketClient>();
     websocket_client_->setApiCredentials(config.getCoinbaseApiKey(), config.getCoinbaseSecretKey());
@@ -56,14 +54,11 @@ bool HFTEngine::initialize(const std::string& config_file) {
     max_position_.store(config.getMaxInventory());
     order_engine_hz_ = config.getOrderEngineHz();
 
-    double initial_capital = std::stod(config.getConfig("INITIAL_CAPITAL", "50.0"));
-
     logger_->info("HFT Engine initialized - config ready");
     std::cout << "HFT Engine Ready" << std::endl;
     std::cout << "   Symbol: " << trading_symbol_
-              << " | Capital: $" << initial_capital
-              << " | Spread: " << config.getSpreadThresholdBps() << " bps"
-              << " | Size: " << order_size_.load() << " ETH" << std::endl;
+              << " | Size: " << order_size_.load() << " ETH"
+              << " | Max Pos: " << max_position_.load() << " ETH" << std::endl;
 
     return true;
 }
@@ -75,6 +70,7 @@ void HFTEngine::start() {
     std::string ws_url = Config::getInstance().getCoinbaseWsUrl();
     if (!websocket_client_->connect(ws_url)) {
         logger_->error("Failed to connect WebSocket for market data");
+        running_.store(false);
         return;
     }
 
@@ -129,9 +125,11 @@ void HFTEngine::order_engine_worker() {
 
     while (running_.load()) {
         auto now = std::chrono::high_resolution_clock::now();
+        bool did_work = false;
 
         HFTMarketData market_data{};
         if (market_data_queue_.pop(market_data)) {
+            did_work = true;
             HFTSignal signal = strategy_->generate_signal(
                 market_data.bid_price, market_data.ask_price,
                 current_position_.load(), order_size_.load());
@@ -141,6 +139,7 @@ void HFTEngine::order_engine_worker() {
         }
 
         if (now - last_order_time >= target_interval) {
+            did_work = true;
             double bid = market_data_feed_->bid();
             double ask = market_data_feed_->ask();
             if (bid > 0 && ask > 0) {
@@ -155,7 +154,12 @@ void HFTEngine::order_engine_worker() {
 
         HFTOrder response{};
         while (executor_->pop_response(response)) {
+            did_work = true;
             executor_->process_order_response(response);
+        }
+
+        if (!did_work) {
+            std::this_thread::yield();
         }
     }
 }
@@ -167,7 +171,9 @@ void HFTEngine::risk_management_worker() {
     double last_pnl = 0.0;
 
     while (running_.load()) {
-        metrics_->metrics().current_position.store(current_position_.load());
+        double pos = current_position_.load();
+        metrics_->metrics().current_position.store(pos);
+        risk_manager_->updatePosition(trading_symbol_, pos);
 
         if (risk_manager_->isCircuitBreakerActive()) {
             logger_->error("Circuit breaker is active - stopping trading");
@@ -219,5 +225,5 @@ void HFTEngine::emergency_stop() {
     std::cout << "EMERGENCY STOP TRIGGERED!" << std::endl;
     logger_->error("Emergency stop triggered");
     risk_breach_.store(true);
-    stop();
+    running_.store(false);
 }

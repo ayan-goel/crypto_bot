@@ -1,13 +1,11 @@
 #include "order/order_manager.h"
-#include "risk/risk_manager.h"
-#include "core/logger.h"
 #include <iostream>
-#include <sstream>
 #include <random>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <cmath>
+#include <ctime>
 
 OrderManager::OrderManager() {
     initializeSession();
@@ -23,12 +21,11 @@ bool OrderManager::initialize() {
 }
 
 void OrderManager::shutdown() {
+    if (shutdown_called_) return;
+    shutdown_called_ = true;
+
     generateSessionSummary();
     std::cout << "Order Manager shutdown complete" << std::endl;
-}
-
-void OrderManager::setRiskManager(RiskManager* risk_manager) {
-    risk_manager_ = risk_manager;
 }
 
 OrderResponse OrderManager::placeOrder(const std::string& symbol, Side side, double price, double quantity) {
@@ -122,29 +119,43 @@ void OrderManager::simulateOrderFill(Order& order) {
 void OrderManager::updatePositionAndPnL(const Order& order) {
     std::lock_guard<std::mutex> lock(pnl_mutex_);
 
-    double quantity_signed = (order.side == Side::BUY) ? order.filled_quantity : -order.filled_quantity;
-    double trade_value = order.filled_quantity * order.price;
+    double old_position = current_position_;
+    double fill_qty = order.filled_quantity;
+    double fill_price = order.price;
+    bool is_buy = (order.side == Side::BUY);
 
-    current_position_ += quantity_signed;
+    bool is_closing = (is_buy && old_position < 0) || (!is_buy && old_position > 0);
 
     double realized_pnl = 0.0;
 
-    if (order.side == Side::SELL && previous_position_ > 0) {
-        realized_pnl = (order.price - avg_buy_price_) * order.filled_quantity;
-    } else if (order.side == Side::BUY) {
-        if (current_position_ > 0) {
-            avg_buy_price_ = ((avg_buy_price_ * std::abs(previous_position_)) + trade_value) / std::abs(current_position_);
+    if (is_closing) {
+        double closing_qty = std::min(fill_qty, std::abs(old_position));
+        if (old_position > 0) {
+            realized_pnl = (fill_price - avg_entry_price_) * closing_qty;
         } else {
-            avg_buy_price_ = order.price;
+            realized_pnl = (avg_entry_price_ - fill_price) * closing_qty;
         }
+
+        double remaining_qty = fill_qty - closing_qty;
+        current_position_ = is_buy ? remaining_qty : -remaining_qty;
+
+        if (remaining_qty > 1e-12) {
+            avg_entry_price_ = fill_price;
+        } else if (std::abs(current_position_) < 1e-12) {
+            avg_entry_price_ = 0.0;
+        }
+    } else {
+        double abs_old = std::abs(old_position);
+        double abs_new = abs_old + fill_qty;
+        if (abs_new > 1e-12) {
+            avg_entry_price_ = (avg_entry_price_ * abs_old + fill_price * fill_qty) / abs_new;
+        } else {
+            avg_entry_price_ = fill_price;
+        }
+        current_position_ += is_buy ? fill_qty : -fill_qty;
     }
 
     cumulative_pnl_ += realized_pnl;
-    previous_position_ = current_position_;
-
-    if (risk_manager_ && realized_pnl != 0.0) {
-        risk_manager_->updatePnL(realized_pnl);
-    }
 }
 
 void OrderManager::initializeSession() {
@@ -169,15 +180,22 @@ void OrderManager::updateSessionStats(const Order& order) {
 }
 
 void OrderManager::generateSessionSummary() {
+    double final_pnl;
+    double final_position;
+    double avg_price;
+    {
+        std::lock_guard<std::mutex> lock(pnl_mutex_);
+        final_pnl = cumulative_pnl_;
+        final_position = current_position_;
+        avg_price = avg_entry_price_;
+    }
+
     std::lock_guard<std::mutex> lock(session_mutex_);
     session_end_time_ = std::chrono::system_clock::now();
 
     auto duration = std::chrono::duration_cast<std::chrono::seconds>(
         session_end_time_ - session_start_time_);
     double duration_seconds = static_cast<double>(duration.count());
-
-    double final_pnl = cumulative_pnl_;
-    double final_position = current_position_;
 
     uint64_t total_trades = buy_trades_ + sell_trades_;
     double trade_rate = (duration_seconds > 0) ? (total_trades / duration_seconds) : 0.0;
@@ -186,15 +204,23 @@ void OrderManager::generateSessionSummary() {
     auto start_time_t = std::chrono::system_clock::to_time_t(session_start_time_);
     auto end_time_t = std::chrono::system_clock::to_time_t(session_end_time_);
 
+    struct tm start_tm{};
+    struct tm end_tm{};
+    localtime_r(&start_time_t, &start_tm);
+    localtime_r(&end_time_t, &end_tm);
+
     std::ofstream summary_file("logs/session_summary.log", std::ios::app);
     if (!summary_file.is_open()) return;
+
+    uint64_t placed = orders_placed_.load();
+    uint64_t filled = orders_filled_.load();
 
     summary_file << "\n" << std::string(80, '=') << std::endl;
     summary_file << "                    HFT TRADING SESSION SUMMARY" << std::endl;
     summary_file << std::string(80, '=') << std::endl;
 
-    summary_file << std::put_time(std::localtime(&start_time_t), "Session Start: %Y-%m-%d %H:%M:%S") << std::endl;
-    summary_file << std::put_time(std::localtime(&end_time_t), "Session End:   %Y-%m-%d %H:%M:%S") << std::endl;
+    summary_file << std::put_time(&start_tm, "Session Start: %Y-%m-%d %H:%M:%S") << std::endl;
+    summary_file << std::put_time(&end_tm, "Session End:   %Y-%m-%d %H:%M:%S") << std::endl;
     summary_file << "Duration: " << duration_seconds << " seconds ("
                  << std::fixed << std::setprecision(2) << duration_seconds / 60.0 << " minutes)" << std::endl;
 
@@ -210,17 +236,17 @@ void OrderManager::generateSessionSummary() {
     summary_file << "\nPROFIT & LOSS:" << std::endl;
     summary_file << "  Final Position:   " << std::fixed << std::setprecision(8) << final_position << " ETH" << std::endl;
     summary_file << "  Cumulative PnL:   $" << std::fixed << std::setprecision(4) << final_pnl << std::endl;
-    summary_file << "  Avg Buy Price:    $" << std::fixed << std::setprecision(2) << avg_buy_price_ << std::endl;
+    summary_file << "  Avg Entry Price:  $" << std::fixed << std::setprecision(2) << avg_price << std::endl;
     if (total_trades > 0) {
         summary_file << "  PnL per Trade:    $" << std::fixed << std::setprecision(6) << (final_pnl / total_trades) << std::endl;
     }
 
     summary_file << "\nSYSTEM STATS:" << std::endl;
-    summary_file << "  Orders Placed: " << orders_placed_ << std::endl;
-    summary_file << "  Orders Filled: " << orders_filled_ << std::endl;
-    if (orders_placed_ > 0) {
+    summary_file << "  Orders Placed: " << placed << std::endl;
+    summary_file << "  Orders Filled: " << filled << std::endl;
+    if (placed > 0) {
         summary_file << "  Fill Rate:     " << std::fixed << std::setprecision(1)
-                     << (orders_filled_ * 100.0 / orders_placed_) << "%" << std::endl;
+                     << (filled * 100.0 / placed) << "%" << std::endl;
     }
 
     if (buy_trades_ > 0 && sell_trades_ > 0) {

@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <cmath>
+#include <ctime>
 
 RiskManager::RiskManager() {
     daily_reset_time_ = std::chrono::system_clock::now();
@@ -18,11 +19,12 @@ bool RiskManager::initialize(const std::string& /*config_file*/) {
 
     auto now = std::chrono::system_clock::now();
     auto tt = std::chrono::system_clock::to_time_t(now);
-    auto tm = *std::localtime(&tt);
-    tm.tm_hour = 0;
-    tm.tm_min = 0;
-    tm.tm_sec = 0;
-    daily_reset_time_ = std::chrono::system_clock::from_time_t(std::mktime(&tm));
+    struct tm tm_buf{};
+    localtime_r(&tt, &tm_buf);
+    tm_buf.tm_hour = 0;
+    tm_buf.tm_min = 0;
+    tm_buf.tm_sec = 0;
+    daily_reset_time_ = std::chrono::system_clock::from_time_t(std::mktime(&tm_buf));
 
     recordRiskEvent(RiskEventType::SYSTEM_INFO, RiskLevel::INFO,
                     "Risk Manager initialized successfully");
@@ -46,6 +48,7 @@ bool RiskManager::canPlaceOrder(const std::string& symbol, const std::string& si
     rejection_reason.clear();
 
     if (circuit_breaker_active_.load()) {
+        std::lock_guard<std::mutex> lock(financial_mutex_);
         rejection_reason = "Circuit breaker active: " + circuit_breaker_reason_;
         return false;
     }
@@ -105,6 +108,11 @@ void RiskManager::updatePnL(double pnl_change) {
         recordRiskEvent(RiskEventType::PNL_WARNING, RiskLevel::WARNING,
                         "Approaching daily loss limit: $" + std::to_string(daily_pnl_));
     }
+}
+
+void RiskManager::updatePosition(const std::string& symbol, double position) {
+    std::lock_guard<std::mutex> lock(position_mutex_);
+    positions_[symbol] = position;
 }
 
 RiskStatus RiskManager::getCurrentRiskStatus() const {
@@ -218,8 +226,8 @@ bool RiskManager::checkOperationalLimits() {
 }
 
 void RiskManager::triggerCircuitBreaker(const std::string& reason) {
-    circuit_breaker_active_.store(true);
     circuit_breaker_reason_ = reason;
+    circuit_breaker_active_.store(true);
 
     recordRiskEvent(RiskEventType::CIRCUIT_BREAKER_TRIGGERED, RiskLevel::EMERGENCY,
                     "Circuit breaker triggered: " + reason);

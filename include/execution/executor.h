@@ -56,6 +56,7 @@ private:
     std::uniform_real_distribution<> fill_distribution_{0.0, 1.0};
 
     double tick_size_;
+    static constexpr double MIN_ORDER_QTY = 0.001;
 
     HFTOrder build_order(char side, double price, double quantity, uint32_t level);
     bool send_order(HFTOrder& order);

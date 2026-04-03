@@ -4,11 +4,10 @@
 #include <atomic>
 #include <thread>
 
-std::atomic<bool> running{true};
+static volatile std::sig_atomic_t signal_received = 0;
 
-void signalHandler(int signum) {
-    std::cout << "\nReceived signal " << signum << ". Shutting down HFT engine..." << std::endl;
-    running = false;
+void signalHandler(int /*signum*/) {
+    signal_received = 1;
 }
 
 int main(int argc, char* argv[]) {
@@ -30,7 +29,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Trading active - Press Ctrl+C to stop" << std::endl;
 
-        while (running && engine.is_running()) {
+        while (!signal_received && engine.is_running()) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
 

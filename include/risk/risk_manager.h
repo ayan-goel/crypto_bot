@@ -54,6 +54,7 @@ public:
                        double price, double quantity, std::string& rejection_reason);
 
     void updatePnL(double pnl_change);
+    void updatePosition(const std::string& symbol, double position);
 
     RiskStatus getCurrentRiskStatus() const;
     bool isCircuitBreakerActive() const;

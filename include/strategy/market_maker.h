@@ -5,7 +5,6 @@
 struct HFTSignal {
     bool place_bid = false;
     bool place_ask = false;
-    bool cancel_orders = false;
     double bid_price = 0.0;
     double ask_price = 0.0;
     double bid_quantity = 0.0;

@@ -59,3 +59,23 @@ target_include_directories(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_INCLUDE_DIRS}
 target_compile_options(${PROJECT_NAME} PRIVATE ${LIBWEBSOCKETS_CFLAGS_OTHER})
 
 install(TARGETS ${PROJECT_NAME} DESTINATION bin)
+
+set(TEST_SOURCES
+    tests/smoke_test.cpp
+    src/core/config.cpp
+    src/core/logger.cpp
+    src/strategy/market_maker.cpp
+    src/execution/executor.cpp
+    src/order/order_manager.cpp
+    src/risk/risk_manager.cpp
+    src/metrics/metrics.cpp
+)
+
+add_executable(smoke_test ${TEST_SOURCES})
+target_link_libraries(smoke_test
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    nlohmann_json::nlohmann_json
+    pthread
+)
+target_include_directories(smoke_test PRIVATE ${CMAKE_SOURCE_DIR}/include)

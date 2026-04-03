@@ -7,7 +7,6 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
-#include <thread>
 
 OrderExecutor::OrderExecutor(const std::string& trading_symbol,
                              OrderManager& order_manager,
@@ -32,25 +31,27 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
 
     for (uint32_t level = 0; level < signal.num_levels; ++level) {
         double level_offset = level * tick_size_ * 0.1;
-        double level_size_factor = 1.0 - level * 0.1;
+        double level_size_factor = std::max(0.1, 1.0 - level * 0.1);
 
         if (signal.place_bid && !risk_breach_.load()) {
-            HFTOrder bid = build_order('B',
-                signal.bid_price - level_offset,
-                signal.bid_quantity * level_size_factor,
-                level);
-            if (check_risk_limits(bid) && send_order(bid)) {
-                metrics_.orders_placed.fetch_add(1);
+            double qty = signal.bid_quantity * level_size_factor;
+            if (qty >= MIN_ORDER_QTY) {
+                HFTOrder bid = build_order('B',
+                    signal.bid_price - level_offset, qty, level);
+                if (check_risk_limits(bid) && send_order(bid)) {
+                    metrics_.orders_placed.fetch_add(1);
+                }
             }
         }
 
         if (signal.place_ask && !risk_breach_.load()) {
-            HFTOrder ask = build_order('S',
-                signal.ask_price + level_offset,
-                signal.ask_quantity * level_size_factor,
-                level);
-            if (check_risk_limits(ask) && send_order(ask)) {
-                metrics_.orders_placed.fetch_add(1);
+            double qty = signal.ask_quantity * level_size_factor;
+            if (qty >= MIN_ORDER_QTY) {
+                HFTOrder ask = build_order('S',
+                    signal.ask_price + level_offset, qty, level);
+                if (check_risk_limits(ask) && send_order(ask)) {
+                    metrics_.orders_placed.fetch_add(1);
+                }
             }
         }
     }
@@ -64,14 +65,17 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
 void OrderExecutor::process_order_response(const HFTOrder& response) {
     if (response.status != 'F') return;
 
+    Side side = (response.side == 'B') ? Side::BUY : Side::SELL;
+    auto result = order_manager_.placeOrder(
+        response.symbol.data(), side, response.price, response.filled_quantity);
+
+    if (!result.success) return;
+
     metrics_.orders_filled.fetch_add(1);
 
     double position_change = (response.side == 'B') ? response.filled_quantity : -response.filled_quantity;
     double old_pos = current_position_.load();
     while (!current_position_.compare_exchange_weak(old_pos, old_pos + position_change)) {}
-
-    Side side = (response.side == 'B') ? Side::BUY : Side::SELL;
-    order_manager_.placeOrder(response.symbol.data(), side, response.price, response.filled_quantity);
 
     metrics_.total_pnl.store(order_manager_.getCurrentPnL());
 }
@@ -106,8 +110,6 @@ HFTOrder OrderExecutor::build_order(char side, double price, double quantity, ui
 }
 
 bool OrderExecutor::send_order(HFTOrder& order) {
-    std::this_thread::sleep_for(std::chrono::microseconds(10));
-
     double current_pos = current_position_.load();
     double base_fill_probability = 0.3;
 
@@ -146,6 +148,8 @@ void OrderExecutor::update_latency_metrics(uint64_t latency_ns) {
     while (latency_ns > current_max && !metrics_.max_order_latency_ns.compare_exchange_weak(current_max, latency_ns)) {}
 
     uint64_t current_avg = metrics_.avg_order_latency_ns.load();
-    uint64_t new_avg = (current_avg + latency_ns) / 2;
+    uint64_t new_avg = current_avg == 0
+        ? latency_ns
+        : static_cast<uint64_t>(current_avg * 0.95 + latency_ns * 0.05);
     metrics_.avg_order_latency_ns.store(new_avg);
 }

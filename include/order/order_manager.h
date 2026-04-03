@@ -3,10 +3,9 @@
 #include "core/types.h"
 #include <string>
 #include <mutex>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
-
-class RiskManager;
 
 struct OrderResponse {
     bool success = false;
@@ -31,13 +30,10 @@ public:
     double getCurrentPnL() const;
     double getCurrentPosition() const;
 
-    void setRiskManager(RiskManager* risk_manager);
-
 private:
     mutable std::mutex pnl_mutex_;
     double current_position_ = 0.0;
-    double previous_position_ = 0.0;
-    double avg_buy_price_ = 0.0;
+    double avg_entry_price_ = 0.0;
     double cumulative_pnl_ = 0.0;
 
     mutable std::mutex session_mutex_;
@@ -48,10 +44,10 @@ private:
     double total_buy_volume_ = 0.0;
     double total_sell_volume_ = 0.0;
 
-    uint64_t orders_placed_ = 0;
-    uint64_t orders_filled_ = 0;
+    std::atomic<uint64_t> orders_placed_{0};
+    std::atomic<uint64_t> orders_filled_{0};
 
-    RiskManager* risk_manager_ = nullptr;
+    bool shutdown_called_ = false;
 
     std::string generateClientOrderId();
 

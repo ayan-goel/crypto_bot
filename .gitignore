@@ -35,7 +35,12 @@ Thumbs.db
 # Temp and backup
 *.tmp
 *.bak
-core
 
-# Data
-data/
+# Core dumps
+/core
+
+# Top-level data directory
+/data/
+
+# Config
+config.txt
