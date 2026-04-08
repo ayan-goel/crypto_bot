@@ -29,27 +29,31 @@ OrderExecutor::OrderExecutor(const std::string& trading_symbol,
 void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
     auto start_time = std::chrono::high_resolution_clock::now();
 
+    const bool breached = risk_breach_.load(std::memory_order_relaxed);
+    const double pos = current_position_.load(std::memory_order_relaxed);
+    const double max_pos = max_position_.load(std::memory_order_relaxed);
+
     for (uint32_t level = 0; level < signal.num_levels; ++level) {
         double level_offset = level * tick_size_ * 0.1;
         double level_size_factor = std::max(0.1, 1.0 - level * 0.1);
 
-        if (signal.place_bid && !risk_breach_.load()) {
+        if (signal.place_bid && !breached) {
             double qty = signal.bid_quantity * level_size_factor;
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder bid = build_order('B',
                     signal.bid_price - level_offset, qty, level);
-                if (check_risk_limits(bid) && send_order(bid)) {
+                if (check_risk_limits(bid, pos, max_pos) && send_order(bid)) {
                     metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }
 
-        if (signal.place_ask && !risk_breach_.load()) {
+        if (signal.place_ask && !breached) {
             double qty = signal.ask_quantity * level_size_factor;
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder ask = build_order('S',
                     signal.ask_price + level_offset, qty, level);
-                if (check_risk_limits(ask) && send_order(ask)) {
+                if (check_risk_limits(ask, pos, max_pos) && send_order(ask)) {
                     metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -84,13 +88,11 @@ bool OrderExecutor::pop_response(HFTOrder& response) {
     return inbound_order_queue_.pop(response);
 }
 
-bool OrderExecutor::check_risk_limits(const HFTOrder& order) const {
-    if (risk_breach_.load()) return false;
-
+bool OrderExecutor::check_risk_limits(const HFTOrder& order,
+                                       double current_pos,
+                                       double max_pos) const {
     double position_change = (order.side == 'B') ? order.quantity : -order.quantity;
-    double new_position = current_position_.load() + position_change;
-
-    return std::abs(new_position) <= max_position_.load();
+    return std::abs(current_pos + position_change) <= max_pos;
 }
 
 HFTOrder OrderExecutor::build_order(char side, double price, double quantity, uint32_t level) {

@@ -39,7 +39,7 @@ public:
     void place_order_ladder(const HFTSignal& signal);
     void process_order_response(const HFTOrder& response);
     bool pop_response(HFTOrder& response);
-    bool check_risk_limits(const HFTOrder& order) const;
+    bool check_risk_limits(const HFTOrder& order, double current_pos, double max_pos) const;
 
 private:
     std::string trading_symbol_;

@@ -116,13 +116,14 @@ void HFTEngine::order_engine_worker() {
     while (running_.load(std::memory_order_relaxed)) {
         auto now = std::chrono::high_resolution_clock::now();
         bool did_work = false;
+        const double order_size = order_size_.load(std::memory_order_relaxed);
+        const double pos = current_position_.load(std::memory_order_relaxed);
 
         HFTMarketData market_data{};
         if (market_data_queue_.pop(market_data)) {
             did_work = true;
             HFTSignal signal = strategy_->generate_signal(
-                market_data.bid_price, market_data.ask_price,
-                current_position_.load(), order_size_.load());
+                market_data.bid_price, market_data.ask_price, pos, order_size);
             if (signal.place_bid || signal.place_ask) {
                 executor_->place_order_ladder(signal);
             }
@@ -133,8 +134,7 @@ void HFTEngine::order_engine_worker() {
             double bid = market_data_feed_->bid();
             double ask = market_data_feed_->ask();
             if (bid > 0 && ask > 0) {
-                HFTSignal signal = strategy_->generate_signal(
-                    bid, ask, current_position_.load(), order_size_.load());
+                HFTSignal signal = strategy_->generate_signal(bid, ask, pos, order_size);
                 if (signal.place_bid || signal.place_ask) {
                     executor_->place_order_ladder(signal);
                 }
