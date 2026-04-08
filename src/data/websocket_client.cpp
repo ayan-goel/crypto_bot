@@ -216,15 +216,10 @@ void WebSocketClient::handleMessage(const std::string& message) {
     try {
         nlohmann::json json_msg = nlohmann::json::parse(message);
 
-        if (message.find("error") != std::string::npos) {
-            std::cout << "ERROR MESSAGE RECEIVED:" << std::endl;
-            std::cout << "   Raw: " << message << std::endl;
-
+        if (json_msg.contains("type") && json_msg["type"] == "error") {
+            std::cerr << "ERROR MESSAGE RECEIVED: " << message.substr(0, 500) << '\n';
             if (json_msg.contains("message")) {
-                std::cout << "   Error message: " << json_msg["message"] << std::endl;
-            }
-            if (json_msg.contains("error")) {
-                std::cout << "   Error field: " << json_msg["error"] << std::endl;
+                std::cerr << "   Error message: " << json_msg["message"] << '\n';
             }
         }
 
@@ -233,8 +228,8 @@ void WebSocketClient::handleMessage(const std::string& message) {
         }
 
     } catch (const std::exception& e) {
-        std::cout << "Error parsing JSON message: " << e.what() << std::endl;
-        std::cout << "Raw message: " << message.substr(0, 500) << std::endl;
+        std::cerr << "Error parsing JSON message: " << e.what() << '\n';
+        std::cerr << "Raw message: " << message.substr(0, 500) << '\n';
         error_count_++;
     }
 }
