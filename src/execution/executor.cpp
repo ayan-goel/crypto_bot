@@ -37,7 +37,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
         double level_offset = level * tick_size_ * 0.1;
         double level_size_factor = std::max(0.1, 1.0 - level * 0.1);
 
-        if (signal.place_bid && !breached) {
+        if (signal.place_bid && HFT_LIKELY(!breached)) {
             double qty = signal.bid_quantity * level_size_factor;
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder bid = build_order('B',
@@ -48,7 +48,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
             }
         }
 
-        if (signal.place_ask && !breached) {
+        if (signal.place_ask && HFT_LIKELY(!breached)) {
             double qty = signal.ask_quantity * level_size_factor;
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder ask = build_order('S',
@@ -67,13 +67,13 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
 }
 
 void OrderExecutor::process_order_response(const HFTOrder& response) {
-    if (response.status != 'F') return;
+    if (HFT_UNLIKELY(response.status != 'F')) return;
 
     Side side = (response.side == 'B') ? Side::BUY : Side::SELL;
     auto result = order_manager_.placeOrder(
         response.symbol.data(), side, response.price, response.filled_quantity);
 
-    if (!result.success) return;
+    if (HFT_UNLIKELY(!result.success)) return;
 
     metrics_.orders_filled.fetch_add(1, std::memory_order_relaxed);
 

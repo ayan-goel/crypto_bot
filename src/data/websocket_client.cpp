@@ -273,7 +273,7 @@ bool WebSocketClient::parseUrl(const std::string& url, std::string& host, std::s
 int WebSocketClient::lwsCallback(struct lws* wsi, enum lws_callback_reasons reason,
                                  void* /*user*/, void* in, size_t len) {
 
-    if (!client_instance || !client_instance->running_) return 0;
+    if (HFT_UNLIKELY(!client_instance || !client_instance->running_)) return 0;
 
     switch (reason) {
         case LWS_CALLBACK_CLIENT_ESTABLISHED:

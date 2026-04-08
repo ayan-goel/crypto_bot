@@ -28,8 +28,8 @@ void MarketDataFeed::start(const std::string& trading_symbol,
 
     ws_client_.setMessageCallback([this, &queue](const nlohmann::json& message) {
         try {
-            if (!message.contains("channel") || message["channel"] != "l2_data" ||
-                !message.contains("events") || !message["events"].is_array()) {
+            if (HFT_UNLIKELY(!message.contains("channel") || message["channel"] != "l2_data" ||
+                !message.contains("events") || !message["events"].is_array())) {
                 return;
             }
 
@@ -85,7 +85,7 @@ void MarketDataFeed::start(const std::string& trading_symbol,
                 double best_ask = ask_book_.begin()->first;
                 double ask_qty = ask_book_.begin()->second;
 
-                if (best_bid >= best_ask) continue;
+                if (HFT_UNLIKELY(best_bid >= best_ask)) continue;
 
                 auto current_time = std::chrono::high_resolution_clock::now();
                 auto processing_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(

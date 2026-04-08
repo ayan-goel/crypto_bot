@@ -22,6 +22,11 @@
 static constexpr int kIdleSpinCount = 32;
 static constexpr int kIdleSpinFallbackThreshold = 1000;
 
+// Branch prediction hints for hot paths. Use HFT_LIKELY when a condition is
+// true >99% of the time (normal data flow); HFT_UNLIKELY for error/rare paths.
+#define HFT_LIKELY(x)   __builtin_expect(!!(x), 1)
+#define HFT_UNLIKELY(x) __builtin_expect(!!(x), 0)
+
 enum class Side { BUY, SELL };
 
 enum class OrderStatus { PENDING, NEW, FILLED, PARTIALLY_FILLED, CANCELED, REJECTED };
