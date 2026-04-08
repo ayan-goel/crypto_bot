@@ -1,4 +1,5 @@
 #include "data/websocket_client.h"
+#include "core/types.h"
 #include <iostream>
 #include <cstring>
 #include <openssl/rand.h>
