@@ -93,7 +93,7 @@ void MarketDataFeed::start(const std::string& trading_symbol,
 
                 uint64_t display_latency_ns = static_cast<uint64_t>(
                     std::min(processing_time_ns, static_cast<int64_t>(50000000)));
-                metrics_.websocket_latency_ns.store(display_latency_ns);
+                metrics_.websocket_latency_ns.store(display_latency_ns, std::memory_order_relaxed);
                 last_ws_message_time_ = current_time;
 
                 HFTMarketData market_data{};
@@ -105,16 +105,16 @@ void MarketDataFeed::start(const std::string& trading_symbol,
                 market_data.timestamp = current_time;
                 market_data.sequence_number = ++sequence_counter_;
 
-                current_bid_.store(best_bid);
-                current_ask_.store(best_ask);
+                current_bid_.store(best_bid, std::memory_order_relaxed);
+                current_ask_.store(best_ask, std::memory_order_relaxed);
                 double spread_bps = ((best_ask - best_bid) / best_bid) * 10000.0;
-                current_spread_bps_.store(spread_bps);
+                current_spread_bps_.store(spread_bps, std::memory_order_relaxed);
                 last_market_update_.store(static_cast<uint64_t>(
                     std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        current_time.time_since_epoch()).count()));
+                        current_time.time_since_epoch()).count()), std::memory_order_relaxed);
 
                 queue.push(market_data);
-                metrics_.market_data_updates.fetch_add(1);
+                metrics_.market_data_updates.fetch_add(1, std::memory_order_relaxed);
             }
         } catch (const std::exception& e) {
             std::cerr << "WebSocket message parsing error: " << e.what() << std::endl;

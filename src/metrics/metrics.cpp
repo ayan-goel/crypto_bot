@@ -25,7 +25,7 @@ void MetricsCollector::tick() {
         uint64_t trades_delta = current_total_trades - last_orders_filled_;
         double pnl_delta = current_pnl - last_pnl_;
 
-        double avg_latency_ms = metrics_.avg_order_latency_ns.load() / 1000000.0;
+        double avg_latency_ms = metrics_.avg_order_latency_ns.load(std::memory_order_relaxed) / 1000000.0;
 
         std::cout << "5s: " << trades_delta << " trades"
                   << " | PnL: $" << std::fixed << std::setprecision(6) << pnl_delta
@@ -69,13 +69,13 @@ void MetricsCollector::update_trading_rate() {
     auto now_ms = static_cast<uint64_t>(
         std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count());
 
-    uint64_t current_orders = metrics_.orders_placed.load();
+    uint64_t current_orders = metrics_.orders_placed.load(std::memory_order_relaxed);
     uint64_t orders_delta = current_orders - last_rate_orders_;
     uint64_t time_delta = now_ms - last_rate_time_ms_;
 
     if (time_delta >= 1000) {
         uint64_t rate = (orders_delta * 1000) / time_delta;
-        metrics_.orders_per_second.store(rate);
+        metrics_.orders_per_second.store(rate, std::memory_order_relaxed);
         last_rate_orders_ = current_orders;
         last_rate_time_ms_ = now_ms;
     }

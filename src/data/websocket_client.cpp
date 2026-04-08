@@ -172,7 +172,7 @@ void WebSocketClient::workerLoop() {
             return;
         }
 
-        while (running_.load()) {
+        while (running_.load(std::memory_order_relaxed)) {
             int result = lws_service(context_, 1);
             if (result < 0) {
                 std::cout << "lws_service error, terminating worker loop" << '\n';

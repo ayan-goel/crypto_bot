@@ -39,7 +39,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
                 HFTOrder bid = build_order('B',
                     signal.bid_price - level_offset, qty, level);
                 if (check_risk_limits(bid) && send_order(bid)) {
-                    metrics_.orders_placed.fetch_add(1);
+                    metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }
@@ -50,7 +50,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
                 HFTOrder ask = build_order('S',
                     signal.ask_price + level_offset, qty, level);
                 if (check_risk_limits(ask) && send_order(ask)) {
-                    metrics_.orders_placed.fetch_add(1);
+                    metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
         }
@@ -71,13 +71,13 @@ void OrderExecutor::process_order_response(const HFTOrder& response) {
 
     if (!result.success) return;
 
-    metrics_.orders_filled.fetch_add(1);
+    metrics_.orders_filled.fetch_add(1, std::memory_order_relaxed);
 
     double position_change = (response.side == 'B') ? response.filled_quantity : -response.filled_quantity;
     double old_pos = current_position_.load();
     while (!current_position_.compare_exchange_weak(old_pos, old_pos + position_change)) {}
 
-    metrics_.total_pnl.store(order_manager_.getCurrentPnL());
+    metrics_.total_pnl.store(order_manager_.getCurrentPnL(), std::memory_order_relaxed);
 }
 
 bool OrderExecutor::pop_response(HFTOrder& response) {

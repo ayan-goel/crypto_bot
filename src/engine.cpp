@@ -113,7 +113,7 @@ void HFTEngine::order_engine_worker() {
     auto last_order_time = std::chrono::high_resolution_clock::now();
     const auto target_interval = std::chrono::microseconds(1000000 / order_engine_hz_);
 
-    while (running_.load()) {
+    while (running_.load(std::memory_order_relaxed)) {
         auto now = std::chrono::high_resolution_clock::now();
         bool did_work = false;
 
