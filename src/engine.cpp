@@ -121,7 +121,7 @@ void HFTEngine::order_engine_worker() {
         const double pos = current_position_.load(std::memory_order_relaxed);
 
         HFTMarketData market_data{};
-        if (HFT_LIKELY(market_data_queue_.pop(market_data))) {
+        if (market_data_queue_.pop(market_data)) {
             did_work = true;
             HFTSignal signal = strategy_->generate_signal(
                 market_data.bid_price, market_data.ask_price, pos, order_size);
