@@ -173,13 +173,12 @@ void WebSocketClient::workerLoop() {
         }
 
         while (running_.load()) {
-            int result = lws_service(context_, 50);
+            int result = lws_service(context_, 1);
             if (result < 0) {
-                std::cout << "lws_service error, terminating worker loop" << std::endl;
+                std::cout << "lws_service error, terminating worker loop" << '\n';
                 break;
             }
             flushTxQueue();
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
     } catch (const std::exception& e) {
