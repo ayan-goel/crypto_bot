@@ -33,6 +33,9 @@ public:
     }
 
 private:
+    static_assert(sizeof(std::atomic<size_t>) <= 64,
+        "std::atomic<size_t> is unexpectedly large; SPSC padding calculation would wrap");
+
     alignas(64) std::atomic<size_t> head_{0};
     char pad_head_[64 - sizeof(std::atomic<size_t>)];
 
