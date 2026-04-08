@@ -6,6 +6,22 @@
 #include <cstring>
 #include <algorithm>
 
+// CPU spin-wait hint: yields the current logical core without leaving it.
+// ~5 ns per call on x86 (PAUSE instruction); prevents memory order violations
+// in tight spin loops and reduces power consumption.
+#if defined(__x86_64__) || defined(_M_X64)
+#  include <immintrin.h>
+#  define HFT_CPU_RELAX() _mm_pause()
+#elif defined(__aarch64__) || defined(__arm64__)
+#  define HFT_CPU_RELAX() __asm__ volatile("yield" ::: "memory")
+#else
+#  include <thread>
+#  define HFT_CPU_RELAX() std::this_thread::yield()
+#endif
+
+static constexpr int kIdleSpinCount = 32;
+static constexpr int kIdleSpinFallbackThreshold = 1000;
+
 enum class Side { BUY, SELL };
 
 enum class OrderStatus { PENDING, NEW, FILLED, PARTIALLY_FILLED, CANCELED, REJECTED };

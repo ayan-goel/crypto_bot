@@ -112,6 +112,7 @@ void HFTEngine::order_engine_worker() {
 
     auto last_order_time = std::chrono::high_resolution_clock::now();
     const auto target_interval = std::chrono::microseconds(1000000 / order_engine_hz_);
+    int idle_count = 0;
 
     while (running_.load(std::memory_order_relaxed)) {
         auto now = std::chrono::high_resolution_clock::now();
@@ -149,7 +150,13 @@ void HFTEngine::order_engine_worker() {
         }
 
         if (!did_work) {
-            std::this_thread::yield();
+            if (++idle_count < kIdleSpinFallbackThreshold) {
+                for (int i = 0; i < kIdleSpinCount; ++i) HFT_CPU_RELAX();
+            } else {
+                std::this_thread::yield();
+            }
+        } else {
+            idle_count = 0;
         }
     }
 }
