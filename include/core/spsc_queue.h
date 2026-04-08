@@ -32,9 +32,13 @@ public:
     }
 
 private:
-    std::atomic<size_t> head_{0};
-    std::atomic<size_t> tail_{0};
-    std::array<T, Size> buffer_;
+    alignas(64) std::atomic<size_t> head_{0};
+    char pad_head_[64 - sizeof(std::atomic<size_t>)];
+
+    alignas(64) std::atomic<size_t> tail_{0};
+    char pad_tail_[64 - sizeof(std::atomic<size_t>)];
+
+    alignas(64) std::array<T, Size> buffer_;
 
     size_t increment(size_t idx) const {
         return (idx + 1) % Size;
