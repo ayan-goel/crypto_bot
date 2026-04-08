@@ -38,7 +38,6 @@ private:
     std::string trading_symbol_;
 
     std::atomic<bool> running_{false};
-    std::thread market_data_thread_;
     std::thread order_engine_thread_;
     std::thread risk_thread_;
     std::thread metrics_thread_;
@@ -52,7 +51,6 @@ private:
 
     int order_engine_hz_ = 2000;
 
-    void market_data_worker();
     void order_engine_worker();
     void risk_management_worker();
     void metrics_worker();

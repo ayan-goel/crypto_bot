@@ -75,9 +75,9 @@ void HFTEngine::start() {
     }
 
     websocket_client_->subscribeOrderBook(trading_symbol_, 10, 100);
+    market_data_feed_->start(trading_symbol_, market_data_queue_);
     std::cout << trading_symbol_ << " market data connected" << std::endl;
 
-    market_data_thread_ = std::thread(&HFTEngine::market_data_worker, this);
     order_engine_thread_ = std::thread(&HFTEngine::order_engine_worker, this);
     risk_thread_ = std::thread(&HFTEngine::risk_management_worker, this);
     metrics_thread_ = std::thread(&HFTEngine::metrics_worker, this);
@@ -95,7 +95,6 @@ void HFTEngine::stop() {
 
     if (websocket_client_) websocket_client_->disconnect();
 
-    if (market_data_thread_.joinable()) market_data_thread_.join();
     if (order_engine_thread_.joinable()) order_engine_thread_.join();
     if (risk_thread_.joinable()) risk_thread_.join();
     if (metrics_thread_.joinable()) metrics_thread_.join();
@@ -105,15 +104,6 @@ void HFTEngine::stop() {
 
     std::cout << "HFT Engine stopped" << std::endl;
     logger_->info("HFT Engine shutdown completed");
-}
-
-void HFTEngine::market_data_worker() {
-    logger_->info("Market data worker started");
-    market_data_feed_->start(trading_symbol_, market_data_queue_);
-
-    while (running_.load()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
 }
 
 void HFTEngine::order_engine_worker() {
