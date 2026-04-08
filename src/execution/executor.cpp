@@ -42,7 +42,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder bid = build_order('B',
                     signal.bid_price - level_offset, qty, level);
-                if (check_risk_limits(bid, pos, max_pos) && send_order(bid)) {
+                if (check_position_limit(bid, pos, max_pos) && send_order(bid)) {
                     metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -53,7 +53,7 @@ void OrderExecutor::place_order_ladder(const HFTSignal& signal) {
             if (qty >= MIN_ORDER_QTY) {
                 HFTOrder ask = build_order('S',
                     signal.ask_price + level_offset, qty, level);
-                if (check_risk_limits(ask, pos, max_pos) && send_order(ask)) {
+                if (check_position_limit(ask, pos, max_pos) && send_order(ask)) {
                     metrics_.orders_placed.fetch_add(1, std::memory_order_relaxed);
                 }
             }
@@ -88,7 +88,7 @@ bool OrderExecutor::pop_response(HFTOrder& response) {
     return inbound_order_queue_.pop(response);
 }
 
-bool OrderExecutor::check_risk_limits(const HFTOrder& order,
+bool OrderExecutor::check_position_limit(const HFTOrder& order,
                                        double current_pos,
                                        double max_pos) const {
     double position_change = (order.side == 'B') ? order.quantity : -order.quantity;

@@ -39,7 +39,6 @@ public:
     void place_order_ladder(const HFTSignal& signal);
     void process_order_response(const HFTOrder& response);
     bool pop_response(HFTOrder& response);
-    bool check_risk_limits(const HFTOrder& order, double current_pos, double max_pos) const;
 
 private:
     std::string trading_symbol_;
@@ -58,6 +57,7 @@ private:
     double tick_size_;
     static constexpr double MIN_ORDER_QTY = 0.001;
 
+    bool check_position_limit(const HFTOrder& order, double current_pos, double max_pos) const;
     HFTOrder build_order(char side, double price, double quantity, uint32_t level);
     bool send_order(HFTOrder& order);
     uint64_t generate_order_id();
