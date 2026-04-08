@@ -37,17 +37,23 @@ private:
 
     std::string trading_symbol_;
 
-    std::atomic<bool> running_{false};
+    alignas(64) std::atomic<bool> running_{false};
+
     std::thread order_engine_thread_;
     std::thread risk_thread_;
     std::thread metrics_thread_;
 
     SPSCQueue<HFTMarketData, 1024> market_data_queue_;
 
+    // Rarely written — can share a cache line
     std::atomic<double> order_size_{0.005};
     std::atomic<double> max_position_{0.1};
-    std::atomic<double> current_position_{0.0};
-    std::atomic<bool> risk_breach_{false};
+
+    // Written by order engine thread, read by risk thread — must be isolated
+    alignas(64) std::atomic<double> current_position_{0.0};
+
+    // Written by risk thread, read by order engine thread — must be isolated
+    alignas(64) std::atomic<bool> risk_breach_{false};
 
     int order_engine_hz_ = 2000;
 
