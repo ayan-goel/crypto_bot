@@ -8,6 +8,7 @@
 template<typename T, size_t Size>
 class SPSCQueue {
     static_assert(Size > 0, "SPSCQueue size must be greater than zero");
+    static_assert((Size & (Size - 1)) == 0, "SPSCQueue size must be a power of two");
 
 public:
     bool push(const T& item) {
@@ -41,6 +42,6 @@ private:
     alignas(64) std::array<T, Size> buffer_;
 
     size_t increment(size_t idx) const {
-        return (idx + 1) % Size;
+        return (idx + 1) & (Size - 1);
     }
 };
